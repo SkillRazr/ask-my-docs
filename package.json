@@ -1,0 +1,26 @@
+{
+  "name": "ask-my-docs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The project you build in The AI-Ready Fresher, SkillRazr's free weekly AI engineering series",
+  "type": "module",
+  "scripts": {
+    "db": "docker compose up -d",
+    "ingest": "tsx src/ingest.ts",
+    "search": "tsx src/search.ts",
+    "typecheck": "tsc"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^18.0.10",
+    "openai": "^7.57.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

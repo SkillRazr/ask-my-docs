@@ -6,12 +6,16 @@
   "type": "module",
   "scripts": {
     "db": "docker compose up -d",
+    "migrate": "tsx src/db/migrate.ts",
     "ingest": "tsx src/ingest.ts",
+    "ingest:db": "tsx src/ingest-db.ts",
+    "worker": "tsx src/worker.ts",
     "search": "tsx src/search.ts",
-    "typecheck": "tsc",
     "ask": "tsx src/ask-docs.ts",
+    "chat": "tsx src/chat.ts",
     "eval": "tsx src/eval-rag.ts",
-    "dev": "tsx src/server.ts"
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc"
   },
   "license": "MIT",
   "dependencies": {

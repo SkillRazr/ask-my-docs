@@ -1,10 +1,11 @@
-import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { ANSWER_MODEL, client } from "../services/llm";
+import { toStandaloneQuestion, type ChatTurn } from "./rewrite";
 import { retrieve } from "./retrieve";
+import { rerank } from "./rerank";
 import { buildContext } from "./context";
-
-const client = new OpenAI();
+import { getCached, setCached } from "./cache";
 
 const ModelAnswer = z.object({
   found: z.boolean(),
@@ -23,53 +24,77 @@ export interface Source {
   number: number;
   title: string;
   chunkId: string;
-  similarity: number;
+  content: string;
+  relevance: number;
 }
 
 export interface RagAnswer {
   found: boolean;
   answer: string;
+  question: string; // the standalone question that was searched for
   sources: Source[];
+  cached?: boolean;
 }
 
-const NOT_FOUND: RagAnswer = {
+export interface AskInput {
+  question: string;
+  tenantId: string;
+  history?: ChatTurn[];
+}
+
+const notFound = (question: string): RagAnswer => ({
   found: false,
   answer: "I couldn't find that in your documents.",
+  question,
   sources: [],
-};
+});
 
-export async function answerQuestion(question: string): Promise<RagAnswer> {
-  // 1. Retrieve
-  const chunks = await retrieve(question);
-  if (chunks.length === 0) return NOT_FOUND; // nothing relevant: skip the LLM call
+export async function answerQuestion({ question, tenantId, history = [] }: AskInput): Promise<RagAnswer> {
+  // 1. Rewrite follow-ups into a standalone question
+  const standalone = await toStandaloneQuestion(question, history);
 
-  // 2. Augment
+  // 2. Cache: the same question for the same tenant costs nothing the second time
+  const cached = await getCached(tenantId, standalone);
+  if (cached) return { ...cached, cached: true };
+
+  // 3. Retrieve widely (hybrid), then rerank to the few chunks that matter
+  const candidates = await retrieve(standalone, tenantId);
+  const chunks = await rerank(standalone, candidates);
+  if (chunks.length === 0) return notFound(standalone); // nothing relevant: skip the LLM call
+
+  // 4. Augment and generate, exactly as in episode 2
   const context = buildContext(chunks);
-
-  // 3. Generate
   const response = await client.responses.parse({
-    model: process.env.OPENAI_MODEL!,
+    model: ANSWER_MODEL,
     instructions: INSTRUCTIONS,
-    input: `Sources:\n${context.text}\n\nQuestion: ${question}`,
+    input: `Sources:\n${context.text}\n\nQuestion: ${standalone}`,
     max_output_tokens: 800,
     text: { format: zodTextFormat(ModelAnswer, "rag_answer") },
   });
 
   const result = response.output_parsed;
-  if (!result || !result.found) return NOT_FOUND;
+  let answer = notFound(standalone);
+  if (result?.found) {
+    const cited = [...new Set(result.citations)].filter((n) => n >= 1 && n <= context.used.length);
+    if (cited.length > 0) {
+      answer = {
+        found: true,
+        answer: result.answer,
+        question: standalone,
+        sources: cited.map((n) => {
+          const chunk = chunks[n - 1];
+          return {
+            number: n,
+            title: chunk.title,
+            chunkId: chunk.id,
+            content: chunk.content,
+            relevance: chunk.relevance,
+          };
+        }),
+      };
+    }
+  }
 
-  // Keep only citations that point at a source we actually sent.
-  const cited = [...new Set(result.citations)].filter(
-    (n) => n >= 1 && n <= context.used.length
-  );
-  if (cited.length === 0) return NOT_FOUND; // an answer with no source is not grounded
-
-  return {
-    found: true,
-    answer: result.answer,
-    sources: cited.map((n) => {
-      const chunk = context.used[n - 1];
-      return { number: n, title: chunk.title, chunkId: chunk.id, similarity: chunk.similarity };
-    }),
-  };
+  await setCached(tenantId, standalone, answer);
+  return answer;
 }

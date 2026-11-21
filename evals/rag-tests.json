@@ -1,0 +1,12 @@
+[
+  { "question": "How many days of leave do new joiners get?", "source": "leave-policy.md" },
+  { "question": "How much time off can I carry over to next year?", "source": "leave-policy.md" },
+  { "question": "Who approves work from home requests?", "source": "remote-work.md" },
+  { "question": "Does the company pay for my home internet?", "source": "remote-work.md" },
+  { "question": "What do I need to bring on my first day?", "source": "onboarding.md" },
+  { "question": "How much can I spend on meals when travelling for work?", "source": "expenses.md" },
+  { "question": "What is the notice period when I resign?", "source": "faq-1" },
+  { "question": "And for interns?", "history": ["What is the notice period when I resign?", "The notice period is 30 days [1]."], "source": "faq-1" },
+  { "question": "What is the CEO's favourite cricket team?", "source": null },
+  { "question": "How do I book a meeting room?", "source": null }
+]

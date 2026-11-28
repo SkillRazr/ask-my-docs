@@ -42,4 +42,13 @@ const runs = await pool.query(
 );
 console.log("Agent runs (episode 5):");
 console.table(runs.rows);
+const feedback = await pool.query(
+  `SELECT mode, COUNT(*) FILTER (WHERE rating = 1)::int AS thumbs_up,
+          COUNT(*) FILTER (WHERE rating = -1)::int AS thumbs_down
+   FROM feedback WHERE created_at > NOW() - make_interval(days => $1)
+   GROUP BY mode ORDER BY mode`,
+  [days]
+);
+console.log("Feedback from the web UI (episode 6):");
+console.table(feedback.rows);
 await pool.end();

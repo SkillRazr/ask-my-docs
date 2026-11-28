@@ -80,6 +80,7 @@ export const tools: Tool[] = [
         sources: result.sources.map((s) => ({
           number: s.number,
           title: s.title,
+          chunkId: s.chunkId, // so a UI can link to the passage
         })),
       };
     },

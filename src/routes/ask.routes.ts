@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { answerQuestion } from "../rag/answer";
 import { streamAnswer, type StreamEvent } from "../rag/stream";
+import { tenantOf } from "./identity";
 
 export const askRouter = express.Router();
 
@@ -17,11 +18,6 @@ const AskBody = z.object({
     .max(20)
     .default([]),
 });
-
-// For now the tenant comes from a header. Anyone can set a header, so this is NOT
-// security: episode 7 takes the tenant from the signed-in user instead.
-const tenantOf = (req: express.Request) =>
-  req.header("x-tenant-id") || "default";
 
 askRouter.post("/ask", async (req, res) => {
   const body = AskBody.safeParse(req.body);

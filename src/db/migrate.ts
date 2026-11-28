@@ -7,6 +7,7 @@ const files = [
   "sql/upgrade-episode-03.sql",
   "sql/upgrade-episode-04.sql",
   "sql/upgrade-episode-05.sql",
+  "sql/upgrade-episode-06.sql",
 ];
 
 for (const file of files) {

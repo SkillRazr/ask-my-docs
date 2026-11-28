@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Ask my docs</title>
+    <meta
+      name="description"
+      content="Ask questions about your documents and get answers with sources."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <h1>Ask my docs</h1>
+        <button type="button" id="new-chat" class="ghost">New chat</button>
+      </div>
+      <div class="controls">
+        <div class="modes" role="group" aria-label="How to answer">
+          <button type="button" data-mode="ask" aria-pressed="true">
+            Quick answer
+          </button>
+          <button type="button" data-mode="agent" aria-pressed="false">
+            Agent
+          </button>
+        </div>
+        <label class="user-field">
+          <span class="user-label">Your name</span>
+          <input
+            id="user"
+            autocomplete="nickname"
+            maxlength="40"
+            placeholder="Your name"
+          />
+        </label>
+      </div>
+    </header>
+
+    <main id="messages" role="log" aria-live="polite">
+      <section class="empty" id="empty">
+        <h2>Ask anything about your documents</h2>
+        <p>
+          <strong>Quick answer</strong> searches once and answers with sources.
+          <strong>Agent</strong> can take several steps, use tools and remember
+          you.
+        </p>
+        <div class="suggestions">
+          <button type="button">
+            How many days of leave do new employees get?
+          </button>
+          <button type="button">
+            Compare the leave for interns and new employees
+          </button>
+          <button type="button">What documents do you have?</button>
+        </div>
+      </section>
+    </main>
+
+    <form id="ask" class="composer">
+      <label for="question" class="visually-hidden">Your question</label>
+      <textarea
+        id="question"
+        rows="1"
+        maxlength="1000"
+        placeholder="Ask a question"
+        required
+      ></textarea>
+      <button type="submit" id="send">Send</button>
+    </form>
+
+    <dialog id="passage">
+      <div class="passage-head">
+        <h2 id="passage-title">Source</h2>
+        <button type="button" class="ghost" id="passage-close">Close</button>
+      </div>
+      <p id="passage-text"></p>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -13,15 +13,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [3. Better RAG in production](https://skillrazr.com/ai-ready-fresher/3) | `episode-03` | Follow-up questions, hybrid search and reranking, a database table as a source, a background ingestion queue, an answer cache, one index shared by many tenants, and faithfulness scores |
 | [4. LLM APIs, tool calling and MCP](https://skillrazr.com/ai-ready-fresher/4) | `episode-04` | Streamed answers, retries and timeouts, the cost of every LLM call per tenant, tools the model can call, and an MCP server (stdio and HTTP) that AI assistants and agents can connect to |
 | [5. AI agents and memory](https://skillrazr.com/ai-ready-fresher/5) | `episode-05` | An agent that plans and calls tools in several steps through MCP, knows when to stop, remembers conversations and facts about each user, and can read images |
+| [6. Project: an end-to-end AI app](https://skillrazr.com/ai-ready-fresher/6) | `episode-06` | A web UI at http://localhost:3000 with streamed answers, the agent's steps as they happen, clickable sources and thumbs-up feedback, on phones and laptops |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-04...episode-05](https://github.com/SkillRazr/ask-my-docs/compare/episode-04...episode-05).
+To see exactly what an episode added, compare it with the one before, for example [episode-05...episode-06](https://github.com/SkillRazr/ask-my-docs/compare/episode-05...episode-06).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-05   # or any branch in the table
+git checkout episode-06   # or any branch in the table
 ```
 
 ## Run it
@@ -46,7 +47,7 @@ npm run eval              # scores retrieval, answers, faithfulness and refusals
 npm run costs             # tokens, cost and latency per purpose, tenant and tool
 npm run mcp:client        # starts the MCP server and calls its tools
 npm run mcp:inspect       # opens the MCP Inspector in your browser
-npm run dev               # starts the API on http://localhost:3000
+npm run dev               # starts the API and the web UI on http://localhost:3000
 ```
 
 Then ask the API a question:
@@ -106,6 +107,8 @@ sql/schema.sql                the document_chunks table (episode 1)
 sql/upgrade-episode-03.sql    tenants, keyword search, ingestion queue, cache, faqs table
 sql/upgrade-episode-04.sql    llm_usage and tool_calls tables
 sql/upgrade-episode-05.sql    conversations, messages, memories, agent_runs
+sql/upgrade-episode-06.sql    feedback from the web UI
+public/                       the web UI: index.html, styles.css, app.js (no build step)
 src/db/                       PostgreSQL connection and migrations
 src/services/                 LLM client (retries, timeouts), usage and cost, embeddings, chunking, ingestion, search
 src/pipeline/jobs.ts          the ingestion queue
@@ -116,7 +119,10 @@ src/mcp/                      the MCP server and its stdio transport
 src/agent/                    the agent loop, its toolbox (MCP clients) and memory
 src/routes/ask.routes.ts      POST /ask and POST /ask/stream
 src/routes/mcp.routes.ts      the MCP server over HTTP, at POST /mcp
-src/routes/agent.routes.ts    POST /agent
+src/routes/agent.routes.ts    POST /agent and POST /agent/stream
+src/routes/passages.routes.ts GET /passages/:id, one source passage
+src/routes/feedback.routes.ts POST /feedback
+src/routes/identity.ts        who is asking (headers for now, sign-in in episode 7)
 src/app.ts, src/server.ts     the Express API
 src/ingest.ts                 queue the files in a folder
 src/ingest-db.ts              queue the rows of the faqs table

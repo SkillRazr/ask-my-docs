@@ -1,0 +1,398 @@
+/* Ask my docs: one small stylesheet. Works on phones first, then widens. */
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --text: #1c1c1a;
+  --muted: #5f5f5a;
+  --border: #dcdcd6;
+  --accent: #2357c6;
+  --accent-text: #ffffff;
+  --user: #e7eefc;
+  --ok: #1d7a46;
+  --bad: #b3261e;
+  --warn-bg: #fff4d6;
+  --radius: 12px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141414;
+    --surface: #1e1e1e;
+    --text: #ececea;
+    --muted: #a6a6a0;
+    --border: #353532;
+    --accent: #7aa2f7;
+    --accent-text: #0d1a33;
+    --user: #22304d;
+    --ok: #5cc98a;
+    --bad: #f28b82;
+    --warn-bg: #3b3218;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* Header */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.modes {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+}
+.modes button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+}
+.modes button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.user-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.user-field input {
+  width: 8.5rem;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 16px; /* 16px stops phones from zooming in */
+}
+.ghost {
+  min-height: 36px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: none;
+}
+
+/* Messages */
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.empty {
+  margin: auto;
+  max-width: 34rem;
+  text-align: center;
+}
+.empty h2 {
+  margin: 0 0 8px;
+  font-size: 1.3rem;
+}
+.empty p {
+  color: var(--muted);
+}
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.suggestions button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: left;
+}
+.message {
+  max-width: 46rem;
+  width: 100%;
+  margin: 0 auto;
+  overflow-wrap: anywhere;
+}
+.user.message {
+  width: auto;
+  max-width: min(85%, 36rem);
+  margin-right: 0;
+  margin-left: auto;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--user);
+  white-space: pre-wrap;
+}
+@media (min-width: 48rem) {
+  .user.message {
+    margin-right: calc((100% - 46rem) / 2);
+  }
+}
+.bot {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.text {
+  white-space: pre-wrap;
+}
+.typing {
+  color: var(--muted);
+}
+.cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  margin: 0 2px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--user);
+  color: var(--accent);
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: 0.1em;
+}
+
+/* Agent steps */
+.steps {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.steps:empty {
+  display: none;
+}
+.step {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  padding: 2px 0;
+}
+.step::before {
+  content: "…";
+  width: 1.2em;
+}
+.step.ok::before {
+  content: "✓";
+  color: var(--ok);
+}
+.step.failed::before {
+  content: "✗";
+  color: var(--bad);
+}
+.step .detail {
+  font-style: italic;
+}
+
+/* Notes, sources and feedback */
+.note:empty {
+  display: none;
+}
+.note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.note.warn {
+  background: var(--warn-bg);
+}
+.note.error {
+  color: var(--bad);
+  border: 1px solid var(--bad);
+}
+.note.info {
+  color: var(--muted);
+  padding: 0;
+}
+.sources:empty,
+.footer:empty {
+  display: none;
+}
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 12px;
+}
+.sources-label,
+.footer-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.source {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+/* The question box */
+.composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 10px 16px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+.composer textarea {
+  flex: 1;
+  min-height: 44px;
+  max-height: 160px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 16px;
+  resize: none;
+}
+#send {
+  min-height: 44px;
+  min-width: 72px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+#send.stop {
+  background: var(--bad);
+  color: #fff;
+}
+
+/* A source passage */
+dialog {
+  width: min(40rem, calc(100% - 32px));
+  max-height: 80dvh;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+.passage-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.passage-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+#passage-text {
+  white-space: pre-wrap;
+}
+
+/* Small phones: keep the header to two short rows */
+@media (max-width: 30rem) {
+  .user-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .user-field input {
+    width: 7rem;
+  }
+  .modes button {
+    padding: 0 12px;
+  }
+}

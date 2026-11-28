@@ -1,9 +1,10 @@
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { ANSWER_MODEL, client } from "../services/llm";
+import { tracked, withTenant } from "../services/usage";
 import { toStandaloneQuestion, type ChatTurn } from "./rewrite";
 import { retrieve } from "./retrieve";
-import { rerank } from "./rerank";
+import { rerank, type RankedChunk } from "./rerank";
 import { buildContext } from "./context";
 import { getCached, setCached } from "./cache";
 
@@ -42,59 +43,78 @@ export interface AskInput {
   history?: ChatTurn[];
 }
 
-const notFound = (question: string): RagAnswer => ({
+export const notFound = (question: string): RagAnswer => ({
   found: false,
   answer: "I couldn't find that in your documents.",
   question,
   sources: [],
 });
 
-export async function answerQuestion({ question, tenantId, history = [] }: AskInput): Promise<RagAnswer> {
-  // 1. Rewrite follow-ups into a standalone question
+// Steps 1 to 3, shared by the normal answer and the streaming one (stream.ts):
+// rewrite the question, check the cache, then retrieve and rerank.
+export async function prepare({ question, tenantId, history = [] }: AskInput) {
   const standalone = await toStandaloneQuestion(question, history);
-
-  // 2. Cache: the same question for the same tenant costs nothing the second time
   const cached = await getCached(tenantId, standalone);
-  if (cached) return { ...cached, cached: true };
-
-  // 3. Retrieve widely (hybrid), then rerank to the few chunks that matter
+  if (cached)
+    return {
+      standalone,
+      cached: { ...cached, cached: true } as RagAnswer,
+      chunks: [],
+    };
   const candidates = await retrieve(standalone, tenantId);
   const chunks = await rerank(standalone, candidates);
-  if (chunks.length === 0) return notFound(standalone); // nothing relevant: skip the LLM call
+  return { standalone, cached: null, chunks };
+}
 
-  // 4. Augment and generate, exactly as in episode 2
-  const context = buildContext(chunks);
-  const response = await client.responses.parse({
-    model: ANSWER_MODEL,
-    instructions: INSTRUCTIONS,
-    input: `Sources:\n${context.text}\n\nQuestion: ${standalone}`,
-    max_output_tokens: 800,
-    text: { format: zodTextFormat(ModelAnswer, "rag_answer") },
-  });
+// Keeps only citation numbers that point at a real source, and turns them into sources.
+export function toSources(
+  citations: number[],
+  chunks: RankedChunk[],
+  used: number
+): Source[] {
+  const cited = [...new Set(citations)].filter((n) => n >= 1 && n <= used);
+  return cited.map((n) => ({
+    number: n,
+    title: chunks[n - 1].title,
+    chunkId: chunks[n - 1].id,
+    content: chunks[n - 1].content,
+    relevance: chunks[n - 1].relevance,
+  }));
+}
 
-  const result = response.output_parsed;
-  let answer = notFound(standalone);
-  if (result?.found) {
-    const cited = [...new Set(result.citations)].filter((n) => n >= 1 && n <= context.used.length);
-    if (cited.length > 0) {
-      answer = {
-        found: true,
-        answer: result.answer,
-        question: standalone,
-        sources: cited.map((n) => {
-          const chunk = chunks[n - 1];
-          return {
-            number: n,
-            title: chunk.title,
-            chunkId: chunk.id,
-            content: chunk.content,
-            relevance: chunk.relevance,
-          };
-        }),
-      };
+export function answerQuestion(input: AskInput): Promise<RagAnswer> {
+  // Every LLM call inside is billed to this tenant (see services/usage.ts).
+  return withTenant(input.tenantId, async () => {
+    const { standalone, cached, chunks } = await prepare(input);
+    if (cached) return cached;
+    if (chunks.length === 0) return notFound(standalone); // nothing relevant: skip the LLM call
+
+    // 4. Augment and generate, exactly as in episode 2
+    const context = buildContext(chunks);
+    const response = await tracked("answer", () =>
+      client.responses.parse({
+        model: ANSWER_MODEL,
+        instructions: INSTRUCTIONS,
+        input: `Sources:\n${context.text}\n\nQuestion: ${standalone}`,
+        max_output_tokens: 800,
+        text: { format: zodTextFormat(ModelAnswer, "rag_answer") },
+      })
+    );
+
+    const result = response.output_parsed;
+    let answer = notFound(standalone);
+    if (result?.found) {
+      const sources = toSources(result.citations, chunks, context.used.length);
+      if (sources.length > 0)
+        answer = {
+          found: true,
+          answer: result.answer,
+          question: standalone,
+          sources,
+        };
     }
-  }
 
-  await setCached(tenantId, standalone, answer);
-  return answer;
+    await setCached(input.tenantId, standalone, answer);
+    return answer;
+  });
 }

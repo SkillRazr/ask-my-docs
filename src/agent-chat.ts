@@ -31,6 +31,7 @@ for await (const line of rl) {
       message,
       tenantId,
       userKey,
+      role: "viewer", // the terminal chat has no approval step, so it only reads
       conversationId,
       onEvent: (event) => {
         if (event.type === "tool_call")

@@ -28,19 +28,32 @@
             Agent
           </button>
         </div>
-        <label class="user-field">
-          <span class="user-label">Your name</span>
-          <input
-            id="user"
-            autocomplete="nickname"
-            maxlength="40"
-            placeholder="Your name"
-          />
-        </label>
+        <div class="account">
+          <span id="who" class="who"></span>
+          <button type="button" id="sign-out" class="ghost">Sign out</button>
+        </div>
       </div>
     </header>
 
-    <main id="messages" role="log" aria-live="polite">
+    <section id="sign-in" class="sign-in" hidden>
+      <h2>Sign in to ask your documents</h2>
+      <p id="sign-in-error" class="note error" hidden></p>
+      <a id="google" class="primary" href="/auth/google" hidden
+        >Sign in with Google</a
+      >
+      <form id="dev-login" hidden>
+        <label for="dev-email">Email (local sign-in for development)</label>
+        <div class="row">
+          <input id="dev-email" type="email" required autocomplete="email" />
+          <button type="submit" class="primary">Sign in</button>
+        </div>
+      </form>
+      <p class="hint">
+        Only invited users can sign in. Ask an admin to add you.
+      </p>
+    </section>
+
+    <main id="messages" role="log" aria-live="polite" hidden>
       <section class="empty" id="empty">
         <h2>Ask anything about your documents</h2>
         <p>
@@ -60,7 +73,7 @@
       </section>
     </main>
 
-    <form id="ask" class="composer">
+    <form id="ask" class="composer" hidden>
       <label for="question" class="visually-hidden">Your question</label>
       <textarea
         id="question"

@@ -6,7 +6,6 @@ const messages = $("#messages");
 const form = $("#ask");
 const input = $("#question");
 const sendButton = $("#send");
-const userInput = $("#user");
 const emptyState = $("#empty");
 
 // localStorage can be blocked (private windows), so every use is wrapped.
@@ -35,16 +34,9 @@ const state = {
   running: null, // the AbortController of the answer being written
 };
 
-userInput.value = store.get("user") ?? "";
-userInput.addEventListener("change", () =>
-  store.set("user", userInput.value.trim())
-);
-
-// Until episode 7 adds sign-in, the name is only a label for the agent's memory.
-const headers = () => ({
-  "Content-Type": "application/json",
-  "x-user-key": userInput.value.trim() || "anonymous",
-});
+// The browser sends the session cookie by itself, so requests need no identity
+// headers. The cookie is HttpOnly: this script can't read it, and neither can an attacker's.
+const headers = () => ({ "Content-Type": "application/json" });
 
 // ---- Reading Server-Sent Events from a POST request ----
 // EventSource only does GET, so read the response body and split it into events.
@@ -77,6 +69,10 @@ async function post(path, body, signal) {
     body: JSON.stringify(body),
     signal,
   });
+  if (response.status === 401) {
+    showSignIn(); // the session expired
+    throw new Error("Please sign in again.");
+  }
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error ?? "Something went wrong. Please try again.");
@@ -142,6 +138,49 @@ function addAnswer() {
     note(message, kind = "warn") {
       note.textContent = message;
       note.className = `note ${kind}`;
+    },
+    // The agent wants to change something. Nothing happens until the user decides.
+    approval({ actionId, tool, args }) {
+      const card = el("div", "approval");
+      const { title } = JSON.parse(args || "{}");
+      card.append(
+        el(
+          "p",
+          null,
+          title
+            ? `The agent wants to add a document: "${title}".`
+            : `The agent wants to run ${tool}.`
+        )
+      );
+      const yes = el("button", "primary", "Approve");
+      const no = el("button", "ghost", "Reject");
+      const decide = async (approve) => {
+        yes.disabled = no.disabled = true;
+        try {
+          const response = await post(`/agent/actions/${actionId}`, {
+            approve,
+          });
+          const result = await response.json();
+          card.replaceChildren(
+            el(
+              "p",
+              "note info",
+              result.status === "approved"
+                ? "Approved. The document will be searchable once it's indexed."
+                : `Not done (${result.status}).`
+            )
+          );
+        } catch (error) {
+          card.append(el("p", "note error", error.message));
+        }
+      };
+      yes.onclick = () => decide(true);
+      no.onclick = () => decide(false);
+      const row = el("div", "row");
+      row.append(yes, no);
+      card.append(row);
+      steps.after(card);
+      scrollDown();
     },
     showSources(list) {
       sources.replaceChildren();
@@ -249,6 +288,7 @@ const STEP_LABELS = {
   docs__ask_docs: "Asking the documents",
   docs__list_documents: "Listing the documents",
   remember: "Saving a note about you",
+  docs__add_document: "Adding a document",
 };
 
 async function agentAnswer(message, view, signal) {
@@ -271,6 +311,10 @@ async function agentAnswer(message, view, signal) {
     } else if (type === "delta") {
       text += data.text;
       view.setText(text);
+    } else if (type === "approval_required") {
+      const step = running.get(data.tool)?.shift();
+      step?.classList.replace("running", "waiting");
+      view.approval(data);
     } else if (type === "reset") {
       text = "";
       view.setText(text);
@@ -372,3 +416,70 @@ for (const button of document.querySelectorAll(".modes button"))
     setMode(button.dataset.mode);
   };
 setMode(state.mode);
+
+// ---- Signing in ----
+const signIn = $("#sign-in");
+const app = [messages, form];
+
+function showSignIn() {
+  document.body.classList.add("signed-out");
+  signIn.hidden = false;
+  for (const part of app) part.hidden = true;
+}
+
+function showApp(user) {
+  document.body.classList.remove("signed-out");
+  signIn.hidden = true;
+  for (const part of app) part.hidden = false;
+  $("#who").textContent = `${user.email} · ${user.role}`;
+}
+
+const SIGN_IN_ERRORS = {
+  "not-invited":
+    "That Google account hasn't been invited. Ask an admin to add you.",
+  "sign-in-expired": "The sign-in took too long. Please try again.",
+  "sign-in-failed": "Sign-in failed. Please try again.",
+};
+
+async function start() {
+  const error = new URLSearchParams(location.search).get("error");
+  if (error) {
+    $("#sign-in-error").textContent =
+      SIGN_IN_ERRORS[error] ?? SIGN_IN_ERRORS["sign-in-failed"];
+    $("#sign-in-error").hidden = false;
+    history.replaceState(null, "", "/");
+  }
+  const me = await fetch("/auth/me");
+  if (me.ok) return showApp(await me.json());
+  const config = await (await fetch("/auth/config")).json();
+  $("#google").hidden = !config.google;
+  $("#dev-login").hidden = !config.devLogin;
+  showSignIn();
+}
+
+$("#dev-login").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const response = await fetch("/auth/dev-login", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ email: $("#dev-email").value }),
+  });
+  const result = await response.json();
+  if (response.ok) {
+    $("#sign-in-error").hidden = true;
+    showApp(result);
+  } else {
+    $("#sign-in-error").textContent = result.error;
+    $("#sign-in-error").hidden = false;
+  }
+});
+
+$("#sign-out").onclick = async () => {
+  await fetch("/auth/logout", { method: "POST" });
+  newChat();
+  store.set("conversationId", null);
+  showSignIn();
+  start();
+};
+
+start();

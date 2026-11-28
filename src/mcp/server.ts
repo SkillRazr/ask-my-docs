@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { can } from "../auth/rbac";
 import { runTool, ToolError, tools, type ToolContext } from "../tools/registry";
 
 // An MCP server that offers the same tools as the assistant, for one tenant.
@@ -7,18 +8,20 @@ import { runTool, ToolError, tools, type ToolContext } from "../tools/registry";
 export function createMcpServer(context: ToolContext) {
   const server = new McpServer({ name: "ask-my-docs", version: "1.0.0" });
 
-  for (const tool of tools) {
+  // Only the tools this caller's role may use. The others don't exist for them.
+  for (const tool of tools.filter((t) => can(context.role, t.permission))) {
     server.registerTool(
       tool.name,
       {
         title: tool.title,
         description: tool.description,
         inputSchema: tool.input,
-        // Hints for clients: these tools only read, and calling one twice is harmless.
+        // Hints for clients: whether the tool only reads, and whether calling it twice
+        // is harmless. Clients (and your agent) ask a person before a tool that writes.
         annotations: {
-          readOnlyHint: true,
+          readOnlyHint: tool.readOnly,
           destructiveHint: false,
-          idempotentHint: true,
+          idempotentHint: tool.readOnly,
           openWorldHint: false,
         },
       },

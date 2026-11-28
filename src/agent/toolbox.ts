@@ -8,6 +8,7 @@ import {
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { FunctionTool } from "openai/resources/responses/responses";
+import type { Role } from "../auth/rbac";
 import { createMcpServer } from "../mcp/server";
 import { rememberFact } from "./memory";
 
@@ -26,6 +27,7 @@ interface ServerConfig {
 export interface Toolbox {
   definitions: FunctionTool[]; // what the model sees
   call(name: string, args: unknown): Promise<string>;
+  needsApproval(name: string): boolean; // true for any tool that isn't read-only
   close(): Promise<void>;
 }
 
@@ -41,15 +43,19 @@ const SEPARATOR = "__";
 
 export async function openToolbox(
   tenantId: string,
-  userKey: string
+  userKey: string,
+  role: Role
 ): Promise<Toolbox> {
   const servers: Connected[] = [];
 
   // 1. Your own MCP server from episode 4, connected in memory: the same tools and
   //    checks as over stdio or HTTP, without starting a process. It is created for
-  //    this tenant, so the agent can only ever see this tenant's documents.
+  //    this tenant, so the agent can only ever see this tenant's documents. And it
+  //    gets the user's role, so the agent can never do more than the user could.
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createMcpServer({ tenantId, caller: "agent" }).connect(serverSide);
+  await createMcpServer({ tenantId, caller: "agent", role }).connect(
+    serverSide
+  );
   servers.push({ name: "docs", client: await connect(clientSide) });
 
   // 2. Any extra servers you configured.
@@ -71,10 +77,15 @@ export async function openToolbox(
   }
 
   const definitions: FunctionTool[] = [];
+  const readOnly = new Set<string>(["remember"]); // saving a note about yourself is safe
   for (const server of servers) {
     const { tools } = await server.client.listTools();
     for (const tool of tools) {
       if (server.allow && !server.allow.includes(tool.name)) continue;
+      // Trust the read-only hint only from your own server. Any other server's
+      // tools need approval, whatever they claim.
+      if (server.name === "docs" && tool.annotations?.readOnlyHint === true)
+        readOnly.add(`${server.name}${SEPARATOR}${tool.name}`);
       definitions.push({
         type: "function",
         name: `${server.name}${SEPARATOR}${tool.name}`,
@@ -144,6 +155,10 @@ export async function openToolbox(
         .join("\n");
       return result.isError ? JSON.stringify({ error: text }) : text;
     },
+    // Only for tools this user really has. An unknown tool name gets an error from
+    // call() instead, never an approval request.
+    needsApproval: (name) =>
+      definitions.some((d) => d.name === name) && !readOnly.has(name),
     async close() {
       await Promise.all(servers.map((s) => s.client.close()));
     },

@@ -16,6 +16,7 @@
     "assistant": "tsx src/assistant.ts",
     "agent": "tsx src/agent-chat.ts",
     "describe": "tsx src/describe-image.ts",
+    "users": "tsx src/users.ts",
     "mcp": "tsx src/mcp-stdio.ts",
     "mcp:client": "tsx src/mcp-client.ts",
     "mcp:inspect": "npx @modelcontextprotocol/inspector npx tsx src/mcp-stdio.ts",
@@ -29,6 +30,7 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "dotenv": "^18.0.10",
     "express": "^5.3.0",
+    "jose": "^6.2.18",
     "openai": "^7.57.0",
     "pg": "^8.23.1",
     "zod": "^4.6.7"

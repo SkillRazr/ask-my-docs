@@ -14,15 +14,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [4. LLM APIs, tool calling and MCP](https://skillrazr.com/ai-ready-fresher/4) | `episode-04` | Streamed answers, retries and timeouts, the cost of every LLM call per tenant, tools the model can call, and an MCP server (stdio and HTTP) that AI assistants and agents can connect to |
 | [5. AI agents and memory](https://skillrazr.com/ai-ready-fresher/5) | `episode-05` | An agent that plans and calls tools in several steps through MCP, knows when to stop, remembers conversations and facts about each user, and can read images |
 | [6. Project: an end-to-end AI app](https://skillrazr.com/ai-ready-fresher/6) | `episode-06` | A web UI at http://localhost:3000 with streamed answers, the agent's steps as they happen, clickable sources and thumbs-up feedback, on phones and laptops |
+| [7. Identity, RBAC and agent permissions](https://skillrazr.com/ai-ready-fresher/7) | `episode-07` | Sign in with Google (OpenID Connect) and session JWTs, invited users with viewer, editor and admin roles, tools per role, and an approval step before the agent changes anything |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-05...episode-06](https://github.com/SkillRazr/ask-my-docs/compare/episode-05...episode-06).
+To see exactly what an episode added, compare it with the one before, for example [episode-06...episode-07](https://github.com/SkillRazr/ask-my-docs/compare/episode-06...episode-07).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-06   # or any branch in the table
+git checkout episode-07   # or any branch in the table
 ```
 
 ## Run it
@@ -34,6 +35,7 @@ npm install
 cp .env.example .env      # then put your OpenAI key in .env
 npm run db                # starts PostgreSQL with pgvector
 npm run migrate           # creates or upgrades the tables (safe to re-run)
+npm run users -- add you@gmail.com default admin   # invite yourself first
 npm run ingest            # queues the files in docs/
 npm run ingest:db         # queues the rows of the faqs table
 npm run worker -- --once  # indexes everything in the queue, then stops
@@ -47,22 +49,25 @@ npm run eval              # scores retrieval, answers, faithfulness and refusals
 npm run costs             # tokens, cost and latency per purpose, tenant and tool
 npm run mcp:client        # starts the MCP server and calls its tools
 npm run mcp:inspect       # opens the MCP Inspector in your browser
-npm run dev               # starts the API and the web UI on http://localhost:3000
+npm run dev               # starts the API and the web UI on http://localhost:3000 (sign in first)
 ```
 
-Then ask the API a question:
+Open http://localhost:3000 and sign in. With `AUTH_DEV_LOGIN=true` you can type an invited email instead of setting up Google. To call the API from the terminal, sign in once and keep the cookie:
 
 ```bash
-curl -X POST http://localhost:3000/ask \
+curl -c cookies.txt -X POST http://localhost:3000/auth/dev-login \
   -H "Content-Type: application/json" \
-  -H "x-tenant-id: default" \
+  -d '{"email": "you@gmail.com"}'
+
+curl -b cookies.txt -X POST http://localhost:3000/ask \
+  -H "Content-Type: application/json" \
   -d '{"question": "Who approves work from home requests?"}'
 ```
 
 Stream an answer, or call the MCP server over HTTP (set `MCP_API_KEYS` in `.env` first):
 
 ```bash
-curl -N -X POST http://localhost:3000/ask/stream \
+curl -b cookies.txt -N -X POST http://localhost:3000/ask/stream \
   -H "Content-Type: application/json" \
   -d '{"question": "Who approves work from home requests?"}'
 
@@ -88,9 +93,8 @@ Add the server to your MCP client's config, with the full path to this folder:
 Or ask the agent over the API:
 
 ```bash
-curl -X POST http://localhost:3000/agent \
+curl -b cookies.txt -X POST http://localhost:3000/agent \
   -H "Content-Type: application/json" \
-  -H "x-user-key: asha" \
   -d '{"message": "Compare the leave for interns and new joiners"}'
 ```
 
@@ -108,6 +112,7 @@ sql/upgrade-episode-03.sql    tenants, keyword search, ingestion queue, cache, f
 sql/upgrade-episode-04.sql    llm_usage and tool_calls tables
 sql/upgrade-episode-05.sql    conversations, messages, memories, agent_runs
 sql/upgrade-episode-06.sql    feedback from the web UI
+sql/upgrade-episode-07.sql    users and their roles, and actions waiting for approval
 public/                       the web UI: index.html, styles.css, app.js (no build step)
 src/db/                       PostgreSQL connection and migrations
 src/services/                 LLM client (retries, timeouts), usage and cost, embeddings, chunking, ingestion, search
@@ -119,10 +124,15 @@ src/mcp/                      the MCP server and its stdio transport
 src/agent/                    the agent loop, its toolbox (MCP clients) and memory
 src/routes/ask.routes.ts      POST /ask and POST /ask/stream
 src/routes/mcp.routes.ts      the MCP server over HTTP, at POST /mcp
-src/routes/agent.routes.ts    POST /agent and POST /agent/stream
+src/routes/agent.routes.ts    POST /agent, POST /agent/stream and POST /agent/actions/:id
 src/routes/passages.routes.ts GET /passages/:id, one source passage
 src/routes/feedback.routes.ts POST /feedback
-src/routes/identity.ts        who is asking (headers for now, sign-in in episode 7)
+src/routes/identity.ts        who is asking: the signed-in user
+src/routes/auth.routes.ts     sign in with Google, local sign-in for development, sign out
+src/routes/admin.routes.ts    invite users and set roles (admins only)
+src/auth/                     roles and permissions, session tokens, Google sign-in, middleware
+src/agent/approvals.ts        actions the agent wants to take, waiting for the user
+src/users.ts                  manage users from the terminal
 src/app.ts, src/server.ts     the Express API
 src/ingest.ts                 queue the files in a folder
 src/ingest-db.ts              queue the rows of the faqs table

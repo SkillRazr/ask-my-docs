@@ -30,7 +30,11 @@ mcpRouter.post("/mcp", async (req, res) => {
 
   // Stateless: a new server and transport for every request, so nothing is shared
   // between clients or tenants, and any instance of the API can answer any request.
-  const server = createMcpServer({ tenantId, caller: "mcp-http" });
+  const server = createMcpServer({
+    tenantId,
+    caller: "mcp-http",
+    role: "viewer", // an API key only ever gets the read-only tools
+  });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });

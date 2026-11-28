@@ -14,14 +14,17 @@ const request =
   "What is the notice period, and which documents mention it?";
 const tenantId = process.env.TENANT_ID ?? "default";
 
-// The same tools the MCP server offers, described in OpenAI's function format.
-const functionTools = tools.map((tool) => ({
-  type: "function" as const,
-  name: tool.name,
-  description: tool.description,
-  parameters: z.toJSONSchema(tool.input, { io: "input" }),
-  strict: false,
-}));
+// The read-only tools, described in OpenAI's function format. This simple
+// assistant has no approval step, so it never gets a tool that writes.
+const functionTools = tools
+  .filter((tool) => tool.readOnly)
+  .map((tool) => ({
+    type: "function" as const,
+    name: tool.name,
+    description: tool.description,
+    parameters: z.toJSONSchema(tool.input, { io: "input" }),
+    strict: false,
+  }));
 
 const INSTRUCTIONS = `You help people find information in their documents.
 Use the tools to look things up. Never answer from memory.
@@ -57,6 +60,7 @@ await withTenant(tenantId, async () => {
         output = await runTool(call.name, JSON.parse(call.arguments), {
           tenantId,
           caller: "assistant",
+          role: "viewer",
         });
       } catch (error) {
         // Tell the model what went wrong, so it can fix its arguments and try again.

@@ -1,7 +1,9 @@
 import express from "express";
 import { z } from "zod";
 import { runAgent, type AgentEvent } from "../agent/agent";
-import { tenantOf, userOf } from "./identity";
+import { decide } from "../agent/approvals";
+import { requirePermission } from "../auth/middleware";
+import { roleOf, tenantOf, userOf } from "./identity";
 
 export const agentRouter = express.Router();
 
@@ -10,7 +12,9 @@ const AgentBody = z.object({
   conversationId: z.uuid().optional(),
 });
 
-agentRouter.post("/agent", async (req, res) => {
+const canRead = requirePermission("documents:read");
+
+agentRouter.post("/agent", canRead, async (req, res) => {
   const body = AgentBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Send a message of up to 1000 characters." });
@@ -21,6 +25,7 @@ agentRouter.post("/agent", async (req, res) => {
       ...body.data,
       tenantId: tenantOf(req),
       userKey: userOf(req),
+      role: roleOf(req),
     });
     res.json(result);
   } catch (error) {
@@ -33,7 +38,7 @@ agentRouter.post("/agent", async (req, res) => {
 
 // The same agent as Server-Sent Events, for the web UI: each step as it happens,
 // then the answer as it's written, then a "done" event with the sources.
-agentRouter.post("/agent/stream", async (req, res) => {
+agentRouter.post("/agent/stream", canRead, async (req, res) => {
   const body = AgentBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Send a message of up to 1000 characters." });
@@ -57,6 +62,7 @@ agentRouter.post("/agent/stream", async (req, res) => {
       ...body.data,
       tenantId: tenantOf(req),
       userKey: userOf(req),
+      role: roleOf(req),
       signal: abort.signal,
       onEvent: (event: AgentEvent) => send(event.type, event),
     });
@@ -70,4 +76,25 @@ agentRouter.post("/agent/stream", async (req, res) => {
     }
   }
   res.end();
+});
+
+// The user's answer to an approval_required event. decide() checks that the action
+// is theirs, still pending and not expired, and that their role still allows it.
+const DecisionBody = z.object({ approve: z.boolean() });
+
+agentRouter.post("/agent/actions/:id", canRead, async (req, res) => {
+  const id = z.uuid().safeParse(req.params.id);
+  const body = DecisionBody.safeParse(req.body);
+  if (!id.success || !body.success) {
+    res.status(400).json({ error: 'Send {"approve": true} or false.' });
+    return;
+  }
+  const decision = await decide(id.data, req.user!, body.data.approve);
+  const status =
+    decision.status === "not_found"
+      ? 404
+      : decision.status === "forbidden"
+        ? 403
+        : 200;
+  res.status(status).json(decision);
 });

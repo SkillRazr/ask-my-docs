@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { answerQuestion } from "../rag/answer";
 import { streamAnswer, type StreamEvent } from "../rag/stream";
+import { requirePermission } from "../auth/middleware";
 import { tenantOf } from "./identity";
 
 export const askRouter = express.Router();
@@ -19,7 +20,9 @@ const AskBody = z.object({
     .default([]),
 });
 
-askRouter.post("/ask", async (req, res) => {
+const canRead = requirePermission("documents:read");
+
+askRouter.post("/ask", canRead, async (req, res) => {
   const body = AskBody.safeParse(req.body);
   if (!body.success) {
     res
@@ -39,7 +42,7 @@ askRouter.post("/ask", async (req, res) => {
 
 // The same answer as Server-Sent Events: the browser gets each piece as it's written.
 // Episode 6's web UI reads this endpoint.
-askRouter.post("/ask/stream", async (req, res) => {
+askRouter.post("/ask/stream", canRead, async (req, res) => {
   const body = AskBody.safeParse(req.body);
   if (!body.success) {
     res

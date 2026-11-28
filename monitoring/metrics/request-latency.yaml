@@ -1,0 +1,19 @@
+# The latencyMs of each "request" log line, as a distribution, so charts can show
+# percentiles such as p95.
+description: API request latency in milliseconds
+filter: jsonPayload.message="request"
+valueExtractor: EXTRACT(jsonPayload.latencyMs)
+labelExtractors:
+  path: EXTRACT(jsonPayload.path)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: DISTRIBUTION
+  unit: ms
+  labels:
+    - key: path
+      valueType: STRING
+bucketOptions:
+  exponentialBuckets:
+    numFiniteBuckets: 20
+    growthFactor: 2
+    scale: 10

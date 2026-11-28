@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { pool } from "../db/pool";
+import { log, tracer } from "../observability";
 
 // US dollars per million tokens. Prices change, so check https://openai.com/api/pricing
 // and update this table when they do. A model that isn't listed costs $0 here.
@@ -46,6 +47,29 @@ export async function recordUsage(
 ) {
   const tenantId = current.getStore()?.tenantId ?? "none";
   const userKey = current.getStore()?.userKey ?? null;
+  const cost = costOf(model, inputTokens, outputTokens);
+  // One span per LLM call, back-dated to when the call started, with the names the
+  // OpenTelemetry GenAI conventions use, so tracing tools show them properly (episode 9).
+  tracer
+    .startSpan(`llm ${purpose}`, {
+      startTime: startedAt,
+      attributes: {
+        "gen_ai.system": "openai",
+        "gen_ai.request.model": model,
+        "gen_ai.usage.input_tokens": inputTokens,
+        "gen_ai.usage.output_tokens": outputTokens,
+        "app.llm.purpose": purpose,
+        "app.llm.cost_usd": cost,
+      },
+    })
+    .end();
+  log("INFO", "llm call", {
+    purpose,
+    model,
+    inputTokens,
+    outputTokens,
+    costUsd: cost,
+  });
   try {
     await pool.query(
       `INSERT INTO llm_usage (tenant_id, purpose, model, input_tokens, output_tokens, cost_usd, latency_ms, user_key)
@@ -56,7 +80,7 @@ export async function recordUsage(
         model,
         inputTokens,
         outputTokens,
-        costOf(model, inputTokens, outputTokens),
+        cost,
         Date.now() - startedAt,
         userKey,
       ]

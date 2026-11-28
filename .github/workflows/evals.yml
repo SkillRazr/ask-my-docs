@@ -1,0 +1,52 @@
+# Runs the RAG and agent evals on every pull request, and fails it if a score drops.
+# It costs OpenAI tokens, so it runs on pull requests and on demand, not on every push.
+name: evals
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      AUTH_SECRET: ci-only-secret-not-used-for-real-sign-in
+      EVAL_MIN: "0.8"
+    steps:
+      - name: Skip when there is no API key (for example on a fork)
+        if: env.OPENAI_API_KEY == ''
+        run: echo "No OPENAI_API_KEY secret, so the evals are skipped."
+      - uses: actions/checkout@v4
+        if: env.OPENAI_API_KEY != ''
+      - uses: actions/setup-node@v4
+        if: env.OPENAI_API_KEY != ''
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install, migrate and index the sample docs
+        if: env.OPENAI_API_KEY != ''
+        run: |
+          npm ci
+          npm run typecheck
+          npm run migrate
+          npm run ingest
+          npm run ingest:db
+          npm run worker -- --once
+      - name: RAG evals
+        if: env.OPENAI_API_KEY != ''
+        run: npm run eval
+      - name: Agent evals
+        if: env.OPENAI_API_KEY != ''
+        run: npm run eval:agent

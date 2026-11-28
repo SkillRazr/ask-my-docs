@@ -5,6 +5,7 @@ import { retrieve } from "../rag/retrieve";
 import { withTenant } from "../services/usage";
 import { enqueue } from "../pipeline/jobs";
 import { can, type Permission, type Role } from "../auth/rbac";
+import { withSpan } from "../observability";
 
 // Who is calling a tool. The tenant is decided by the server (from its config or an
 // API key), never by the model: a tool argument can be anything the model writes.
@@ -167,8 +168,11 @@ export async function runTool(
   const startedAt = Date.now();
   let error: string | null = null;
   try {
-    const result = await withTenant(context.tenantId, () =>
-      tool.run(parsed.data, context)
+    // A span per tool call, so a trace shows which tools ran and how long each took.
+    const result = await withSpan(
+      `tool ${name}`,
+      { "app.tool.name": name, "app.tool.caller": context.caller },
+      () => withTenant(context.tenantId, () => tool.run(parsed.data, context))
     );
     const text = JSON.stringify(result, null, 2);
     return text.length > MAX_RESULT_CHARS

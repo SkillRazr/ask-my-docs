@@ -1,5 +1,7 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
+import { context } from "@opentelemetry/api";
+import { log } from "./observability";
 import { askRouter } from "./routes/ask.routes";
 import { mcpRouter } from "./routes/mcp.routes";
 import { agentRouter } from "./routes/agent.routes";
@@ -11,6 +13,24 @@ import { adminRouter } from "./routes/admin.routes";
 
 export const app = express();
 app.use(express.json());
+// One structured log line per request: what, who, how it ended and how long it took.
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  const active = context.active(); // the request's trace, so the log line links to it
+  res.on("finish", () => {
+    if (!req.route) return; // static files and unknown paths: not worth a line
+    context.with(active, () =>
+      log(res.statusCode >= 500 ? "ERROR" : "INFO", "request", {
+        method: req.method,
+        path: req.route?.path ?? req.path,
+        status: res.statusCode,
+        latencyMs: Date.now() - startedAt,
+        user: req.user?.id,
+      })
+    );
+  });
+  next();
+});
 app.use(authenticate); // sets req.user from the session cookie or a Bearer token
 app.use(authRouter); // sign in with Google, sign out, who am I (episode 7)
 app.use(adminRouter); // invite users and set roles, for admins (episode 7)

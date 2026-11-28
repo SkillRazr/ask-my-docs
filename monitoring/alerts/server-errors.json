@@ -1,0 +1,26 @@
+{
+  "displayName": "Ask my docs: server errors",
+  "documentation": {
+    "content": "More than 5 requests failed with a 5xx status in 5 minutes. Open Logs Explorer, filter on jsonPayload.message=\"request\" AND severity=ERROR, and follow the trace link on a failing request.",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "5xx responses",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/ask_my_docs_requests\" AND metric.label.status=monitoring.regex.full_match(\"5..\")",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 5,
+        "duration": "0s"
+      }
+    }
+  ]
+}

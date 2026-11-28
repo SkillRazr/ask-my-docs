@@ -1,0 +1,18 @@
+# The costUsd of each "llm call" log line from src/services/usage.ts, by purpose.
+description: Cost of each LLM call in US dollars
+filter: jsonPayload.message="llm call"
+valueExtractor: EXTRACT(jsonPayload.costUsd)
+labelExtractors:
+  purpose: EXTRACT(jsonPayload.purpose)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: DISTRIBUTION
+  unit: USD
+  labels:
+    - key: purpose
+      valueType: STRING
+bucketOptions:
+  exponentialBuckets:
+    numFiniteBuckets: 20
+    growthFactor: 2
+    scale: 0.00001

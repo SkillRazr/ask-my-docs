@@ -16,15 +16,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [6. Project: an end-to-end AI app](https://skillrazr.com/ai-ready-fresher/6) | `episode-06` | A web UI at http://localhost:3000 with streamed answers, the agent's steps as they happen, clickable sources and thumbs-up feedback, on phones and laptops |
 | [7. Identity, RBAC and agent permissions](https://skillrazr.com/ai-ready-fresher/7) | `episode-07` | Sign in with Google (OpenID Connect) and session JWTs, invited users with viewer, editor and admin roles, tools per role, and an approval step before the agent changes anything |
 | [8. Agent gateways, guardrails and policy](https://skillrazr.com/ai-ready-fresher/8) | `episode-08` | A gateway in front of every LLM route: per-user rate limits and daily budgets, personal data redaction, prompt injection checks, policy rules for tool calls, output checks, and quarantine for suspicious documents |
+| [9. Observability and agent evaluation](https://skillrazr.com/ai-ready-fresher/9) | `episode-09` | Traces of every request, agent step, tool call and LLM call (locally in Jaeger, or in Cloud Trace), structured logs, a Cloud Monitoring dashboard and alerts, agent evals for tool use, answers and safety, and evals that fail a pull request in CI |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-07...episode-08](https://github.com/SkillRazr/ask-my-docs/compare/episode-07...episode-08).
+To see exactly what an episode added, compare it with the one before, for example [episode-08...episode-09](https://github.com/SkillRazr/ask-my-docs/compare/episode-08...episode-09).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-08   # or any branch in the table
+git checkout episode-09   # or any branch in the table
 ```
 
 ## Run it
@@ -47,12 +48,23 @@ npm run assistant -- "Which documents mention the notice period?"   # tool calli
 npm run agent             # chat with the agent: memory, several steps, tool calls shown
 npm run describe -- photo.png "What does this say?"                  # read an image
 npm run eval              # scores retrieval, answers, faithfulness and refusals
+npm run eval:agent        # scores the agent's tool use, answers and safety
+npm run feedback          # turns thumbs-down answers into new test cases to review
 npm run costs             # tokens, cost and latency per purpose, tenant and tool
 npm run guardrails        # what the gateway blocked, top spenders, documents held for review
 npm run mcp:client        # starts the MCP server and calls its tools
 npm run mcp:inspect       # opens the MCP Inspector in your browser
 npm run dev               # starts the API and the web UI on http://localhost:3000 (sign in first)
 ```
+
+To see traces, start Jaeger and run the app with `TRACE_EXPORTER=otlp`, then open http://localhost:16686:
+
+```bash
+docker run -d --name jaeger -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one
+TRACE_EXPORTER=otlp npm run dev
+```
+
+On Google Cloud, use `TRACE_EXPORTER=gcp` and run `monitoring/setup.sh` once to create the log-based metrics, the dashboard and the alerts.
 
 Open http://localhost:3000 and sign in. With `AUTH_DEV_LOGIN=true` you can type an invited email instead of setting up Google. To call the API from the terminal, sign in once and keep the cookie:
 
@@ -109,6 +121,10 @@ To give the agent more tools, copy `mcp-servers.example.json` to `mcp-servers.js
 ```text
 docs/                         documents to index
 evals/rag-tests.json          test questions, with the document that should answer each
+evals/agent-tests.json        agent tasks, with the tools each should and shouldn't call
+evals/guard-tests.json        attacks the gateway should block, and safe questions it should let through
+monitoring/                   log-based metrics, dashboard and alerts for Cloud Monitoring
+.github/workflows/evals.yml   runs both evals on every pull request
 sql/schema.sql                the document_chunks table (episode 1)
 sql/upgrade-episode-03.sql    tenants, keyword search, ingestion queue, cache, faqs table
 sql/upgrade-episode-04.sql    llm_usage and tool_calls tables
@@ -150,6 +166,10 @@ src/mcp-stdio.ts              start the MCP server for a local client
 src/mcp-client.ts             a small MCP client to test the server
 src/costs.ts                  what the app spent
 src/eval-rag.ts               score the pipeline on the test set
+src/eval-agent.ts             score the agent on its test set
+src/feedback-review.ts        turn negative feedback into draft test cases
+src/telemetry.ts              OpenTelemetry: starts tracing before the app loads
+src/observability.ts          spans and structured JSON logs
 ```
 
 Never commit your `.env`. It holds your API key.

@@ -1,0 +1,11 @@
+# Counts the "agent run" log lines from src/agent/agent.ts, by how each run stopped.
+description: Agent runs, by stop reason
+filter: jsonPayload.message="agent run"
+labelExtractors:
+  stop_reason: EXTRACT(jsonPayload.stopReason)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  labels:
+    - key: stop_reason
+      valueType: STRING

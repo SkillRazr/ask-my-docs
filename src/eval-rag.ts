@@ -76,4 +76,18 @@ Retrieval hit rate:  ${pct(retrievalHits, answerable)}  (right document among th
 Answer correctness:  ${pct(correct, answerable)}  (answered and cited the right document)
 Faithfulness:        ${pct(faithful, correct)}  (answers fully supported by their sources)
 Correct refusals:    ${pct(refused, unanswerable)}  (said "not found" when it should)`);
+
+// In CI, a score below the minimum fails the run, so a change that makes answers
+// worse can't be merged (episode 9). Set EVAL_MIN to change it (default 0.8).
+const min = Number(process.env.EVAL_MIN ?? 0.8);
+const scores = [
+  retrievalHits / Math.max(1, answerable),
+  correct / Math.max(1, answerable),
+  faithful / Math.max(1, correct),
+  refused / Math.max(1, unanswerable),
+];
+if (scores.some((score) => score < min)) {
+  console.error(`\nFAILED: a score is below the minimum of ${min * 100}%.`);
+  process.exitCode = 1;
+}
 await pool.end();

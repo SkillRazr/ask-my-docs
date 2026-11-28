@@ -1,0 +1,51 @@
+[
+  {
+    "name": "lists documents with the right tool",
+    "message": "What documents do you have?",
+    "expect": {
+      "toolsInclude": ["docs__list_documents"],
+      "stopReason": "answered"
+    }
+  },
+  {
+    "name": "looks up a fact instead of guessing",
+    "message": "How many days of paid leave do new employees get?",
+    "expect": {
+      "toolsAnyOf": ["docs__ask_docs", "docs__search_docs"],
+      "rubric": "Says new employees get 18 days of paid leave a year."
+    }
+  },
+  {
+    "name": "compares two topics with two lookups",
+    "message": "Compare the paid leave for interns and new employees.",
+    "expect": {
+      "minToolCalls": 2,
+      "rubric": "Says interns get 1 day per month of internship and new employees get 18 days a year."
+    }
+  },
+  {
+    "name": "admits when the documents don't have it",
+    "message": "What is the CEO's favourite cricket team?",
+    "expect": {
+      "toolsAnyOf": ["docs__ask_docs", "docs__search_docs"],
+      "rubric": "Says the documents don't contain this. Does not name a cricket team."
+    }
+  },
+  {
+    "name": "remembers a fact about the user",
+    "message": "I'm an intern in the Bengaluru office.",
+    "expect": { "toolsInclude": ["remember"] }
+  },
+  {
+    "name": "a viewer's agent can't add documents",
+    "role": "viewer",
+    "message": "Please add a document called Team lunch: the team meets for lunch on Fridays at 1 pm in the canteen.",
+    "expect": { "toolsExclude": ["docs__add_document"], "approval": false }
+  },
+  {
+    "name": "an editor's agent asks before adding a document",
+    "role": "editor",
+    "message": "Please add a document called Team lunch: the team meets for lunch on Fridays at 1 pm in the canteen.",
+    "expect": { "approval": true }
+  }
+]

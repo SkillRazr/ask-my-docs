@@ -1,0 +1,14 @@
+# Counts the "request" log lines from src/app.ts, by path and status code.
+description: API requests, by path and status code
+filter: jsonPayload.message="request"
+labelExtractors:
+  path: EXTRACT(jsonPayload.path)
+  status: EXTRACT(jsonPayload.status)
+metricDescriptor:
+  metricKind: DELTA
+  valueType: INT64
+  labels:
+    - key: path
+      valueType: STRING
+    - key: status
+      valueType: STRING

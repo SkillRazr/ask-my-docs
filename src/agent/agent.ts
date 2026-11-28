@@ -16,6 +16,7 @@ import type { Role } from "../auth/rbac";
 import { checkToolCall } from "../gateway/policy";
 import { CANARY, checkOutput } from "../gateway/output";
 import { logEvent } from "../gateway/events";
+import { log, withSpan } from "../observability";
 
 // A passage a tool returned, so a UI can link to it (episode 6).
 export interface SourceRef {
@@ -100,232 +101,249 @@ const FALLBACK: Record<Exclude<StopReason, "answered">, string> = {
 export function runAgent(input: AgentInput): Promise<AgentResult> {
   return withTenant(
     input.tenantId,
-    async () => {
-      const startedAt = Date.now();
-      const { tenantId, userKey } = input;
-      const emit = input.onEvent ?? (() => {});
+    // One span for the whole run. The LLM calls and tool calls inside it become its
+    // children, so a trace shows every step of the run (episode 9).
+    () =>
+      withSpan("agent.run", { "app.tenant": input.tenantId }, async (span) => {
+        const startedAt = Date.now();
+        const { tenantId, userKey } = input;
+        const emit = input.onEvent ?? (() => {});
 
-      // 1. Memory: the conversation so far (short-term) and facts about the user (long-term)
-      let conversationId = input.conversationId;
-      let history = conversationId
-        ? await loadHistory(conversationId, tenantId, userKey)
-        : null;
-      if (!conversationId || !history) {
-        conversationId = await startConversation(tenantId, userKey);
-        history = { summary: "", recent: [] };
-      }
-      const facts = await recallFacts(tenantId, userKey, input.message);
+        // 1. Memory: the conversation so far (short-term) and facts about the user (long-term)
+        let conversationId = input.conversationId;
+        let history = conversationId
+          ? await loadHistory(conversationId, tenantId, userKey)
+          : null;
+        if (!conversationId || !history) {
+          conversationId = await startConversation(tenantId, userKey);
+          history = { summary: "", recent: [] };
+        }
+        const facts = await recallFacts(tenantId, userKey, input.message);
 
-      let context = "";
-      if (facts.length)
-        context += `What you know about this user:\n- ${facts.join("\n- ")}\n\n`;
-      if (history.summary)
-        context += `Summary of the earlier conversation:\n${history.summary}\n\n`;
+        let context = "";
+        if (facts.length)
+          context += `What you know about this user:\n- ${facts.join("\n- ")}\n\n`;
+        if (history.summary)
+          context += `Summary of the earlier conversation:\n${history.summary}\n\n`;
 
-      const conversation: ResponseInputItem[] = [
-        ...history.recent.map((turn) => ({
-          role: turn.role,
-          content: turn.content,
-        })),
-        { role: "user", content: input.message },
-      ];
+        const conversation: ResponseInputItem[] = [
+          ...history.recent.map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+          })),
+          { role: "user", content: input.message },
+        ];
 
-      // 2. The loop
-      const toolbox = await openToolbox(tenantId, userKey, input.role);
-      const toolsUsed: string[] = [];
-      const sources: SourceRef[] = [];
-      const seenCalls = new Set<string>();
-      let answer = "";
-      let stopReason: StopReason = "max_steps";
-      let step = 0;
+        // 2. The loop
+        const toolbox = await openToolbox(tenantId, userKey, input.role);
+        const toolsUsed: string[] = [];
+        const sources: SourceRef[] = [];
+        const seenCalls = new Set<string>();
+        let answer = "";
+        let stopReason: StopReason = "max_steps";
+        let step = 0;
 
-      try {
-        while (step < MAX_STEPS) {
-          step++;
-          // Stream every step. If the model answers, the user sees the words as they're
-          // written. If it calls tools instead, there is usually no text at all.
-          let streamed = false;
-          const response = await tracked("agent", async () => {
-            const stream = client.responses.stream(
-              {
-                model: ANSWER_MODEL,
-                instructions: context
-                  ? `${INSTRUCTIONS}\n\n${context}`
-                  : INSTRUCTIONS,
-                input: conversation,
-                tools: toolbox.definitions,
-              },
-              { signal: input.signal }
+        try {
+          while (step < MAX_STEPS) {
+            step++;
+            span.addEvent("agent.step", { step });
+            // Stream every step. If the model answers, the user sees the words as they're
+            // written. If it calls tools instead, there is usually no text at all.
+            let streamed = false;
+            const response = await tracked("agent", async () => {
+              const stream = client.responses.stream(
+                {
+                  model: ANSWER_MODEL,
+                  instructions: context
+                    ? `${INSTRUCTIONS}\n\n${context}`
+                    : INSTRUCTIONS,
+                  input: conversation,
+                  tools: toolbox.definitions,
+                },
+                { signal: input.signal }
+              );
+              for await (const event of stream) {
+                if (event.type !== "response.output_text.delta") continue;
+                streamed = true;
+                emit({ type: "delta", text: event.delta });
+              }
+              return stream.finalResponse();
+            });
+
+            const calls = response.output.filter(
+              (item) => item.type === "function_call"
             );
-            for await (const event of stream) {
-              if (event.type !== "response.output_text.delta") continue;
-              streamed = true;
-              emit({ type: "delta", text: event.delta });
+            if (calls.length === 0) {
+              answer = response.output_text;
+              stopReason = "answered";
+              break;
             }
-            return stream.finalResponse();
-          });
+            // The model wrote something, then called tools: that was thinking out loud.
+            if (streamed) emit({ type: "reset" });
 
-          const calls = response.output.filter(
-            (item) => item.type === "function_call"
-          );
-          if (calls.length === 0) {
-            answer = response.output_text;
-            stopReason = "answered";
-            break;
-          }
-          // The model wrote something, then called tools: that was thinking out loud.
-          if (streamed) emit({ type: "reset" });
+            // The same tool with the same arguments again means the agent is stuck.
+            const signature = calls
+              .map((c) => `${c.name}(${c.arguments})`)
+              .join("|");
+            if (seenCalls.has(signature)) {
+              stopReason = "repeated_call";
+              break;
+            }
+            seenCalls.add(signature);
 
-          // The same tool with the same arguments again means the agent is stuck.
-          const signature = calls
-            .map((c) => `${c.name}(${c.arguments})`)
-            .join("|");
-          if (seenCalls.has(signature)) {
-            stopReason = "repeated_call";
-            break;
-          }
-          seenCalls.add(signature);
-
-          conversation.push(...calls);
-          for (const call of calls) {
-            emit({
-              type: "tool_call",
-              step,
-              tool: call.name,
-              args: call.arguments,
-            });
-            let output: string;
-            // Every call must pass the policy first, even ones that would ask for approval.
-            const args = parseArgs(call.arguments);
-            const policy = await checkToolCall({
-              tool: call.name,
-              args,
-              tenantId,
-              userKey,
-              callsThisRun: toolsUsed.length,
-            });
-            if (!policy.allowed) {
-              await logEvent(tenantId, userKey, "policy_denied", policy.rule);
+            conversation.push(...calls);
+            for (const call of calls) {
+              emit({
+                type: "tool_call",
+                step,
+                tool: call.name,
+                args: call.arguments,
+              });
+              let output: string;
+              // Every call must pass the policy first, even ones that would ask for approval.
+              const args = parseArgs(call.arguments);
+              const policy = await checkToolCall({
+                tool: call.name,
+                args,
+                tenantId,
+                userKey,
+                callsThisRun: toolsUsed.length,
+              });
+              if (!policy.allowed) {
+                await logEvent(tenantId, userKey, "policy_denied", policy.rule);
+                emit({
+                  type: "tool_result",
+                  step,
+                  tool: call.name,
+                  ok: false,
+                  sources: [],
+                });
+                conversation.push({
+                  type: "function_call_output",
+                  call_id: call.call_id,
+                  output: JSON.stringify({ denied_by_policy: policy.reason }),
+                });
+                continue;
+              }
+              // A tool that changes data doesn't run now. It waits for the user's approval.
+              if (toolbox.needsApproval(call.name)) {
+                const actionId = await requestApproval({
+                  tenantId,
+                  userId: userKey,
+                  conversationId,
+                  tool: call.name,
+                  args: args,
+                });
+                emit({
+                  type: "approval_required",
+                  step,
+                  actionId,
+                  tool: call.name,
+                  args: call.arguments,
+                });
+                toolsUsed.push(call.name);
+                conversation.push({
+                  type: "function_call_output",
+                  call_id: call.call_id,
+                  output: JSON.stringify({ status: "waiting_for_approval" }),
+                });
+                continue;
+              }
+              try {
+                output = await toolbox.call(call.name, args);
+              } catch (error) {
+                console.error(error);
+                output = JSON.stringify({ error: "The tool failed." });
+              }
+              const ok = !output.startsWith('{"error"');
+              const found = ok ? sourcesIn(output) : [];
+              for (const source of found)
+                if (!sources.some((s) => s.chunkId === source.chunkId))
+                  sources.push(source);
               emit({
                 type: "tool_result",
                 step,
                 tool: call.name,
-                ok: false,
-                sources: [],
-              });
-              conversation.push({
-                type: "function_call_output",
-                call_id: call.call_id,
-                output: JSON.stringify({ denied_by_policy: policy.reason }),
-              });
-              continue;
-            }
-            // A tool that changes data doesn't run now. It waits for the user's approval.
-            if (toolbox.needsApproval(call.name)) {
-              const actionId = await requestApproval({
-                tenantId,
-                userId: userKey,
-                conversationId,
-                tool: call.name,
-                args: args,
-              });
-              emit({
-                type: "approval_required",
-                step,
-                actionId,
-                tool: call.name,
-                args: call.arguments,
+                ok,
+                sources: found,
               });
               toolsUsed.push(call.name);
               conversation.push({
                 type: "function_call_output",
                 call_id: call.call_id,
-                output: JSON.stringify({ status: "waiting_for_approval" }),
+                output,
               });
-              continue;
             }
-            try {
-              output = await toolbox.call(call.name, args);
-            } catch (error) {
-              console.error(error);
-              output = JSON.stringify({ error: "The tool failed." });
-            }
-            const ok = !output.startsWith('{"error"');
-            const found = ok ? sourcesIn(output) : [];
-            for (const source of found)
-              if (!sources.some((s) => s.chunkId === source.chunkId))
-                sources.push(source);
-            emit({
-              type: "tool_result",
-              step,
-              tool: call.name,
-              ok,
-              sources: found,
-            });
-            toolsUsed.push(call.name);
-            conversation.push({
-              type: "function_call_output",
-              call_id: call.call_id,
-              output,
-            });
           }
+        } catch (error) {
+          if (input.signal?.aborted) stopReason = "cancelled";
+          else {
+            console.error(error);
+            stopReason = "error";
+          }
+        } finally {
+          await toolbox.close();
         }
-      } catch (error) {
-        if (input.signal?.aborted) stopReason = "cancelled";
-        else {
-          console.error(error);
-          stopReason = "error";
+
+        if (stopReason !== "answered") answer = FALLBACK[stopReason];
+        // Check the answer before it's final: no secrets or ids, and no instructions.
+        // The UI replaces the streamed text with this one.
+        const checked = checkOutput(answer);
+        if (checked.found.length)
+          await logEvent(
+            tenantId,
+            userKey,
+            checked.blocked ? "output_blocked" : "output_redacted",
+            checked.found.join(", ")
+          );
+        answer = checked.text;
+        emit({ type: "answer", text: answer });
+
+        // 3. Save the turn, keep the history short, and record the run. A cancelled
+        //    turn isn't saved: the user never saw its answer.
+        if (stopReason !== "cancelled") {
+          await saveTurns(conversationId, [
+            { role: "user", content: input.message },
+            { role: "assistant", content: answer },
+          ]);
+          await compactHistory(conversationId);
         }
-      } finally {
-        await toolbox.close();
-      }
-
-      if (stopReason !== "answered") answer = FALLBACK[stopReason];
-      // Check the answer before it's final: no secrets or ids, and no instructions.
-      // The UI replaces the streamed text with this one.
-      const checked = checkOutput(answer);
-      if (checked.found.length)
-        await logEvent(
-          tenantId,
-          userKey,
-          checked.blocked ? "output_blocked" : "output_redacted",
-          checked.found.join(", ")
-        );
-      answer = checked.text;
-      emit({ type: "answer", text: answer });
-
-      // 3. Save the turn, keep the history short, and record the run. A cancelled
-      //    turn isn't saved: the user never saw its answer.
-      if (stopReason !== "cancelled") {
-        await saveTurns(conversationId, [
-          { role: "user", content: input.message },
-          { role: "assistant", content: answer },
-        ]);
-        await compactHistory(conversationId);
-      }
-      await pool.query(
-        `INSERT INTO agent_runs (id, conversation_id, tenant_id, stop_reason, steps, tools_used, latency_ms)
+        await pool.query(
+          `INSERT INTO agent_runs (id, conversation_id, tenant_id, stop_reason, steps, tools_used, latency_ms)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          randomUUID(),
-          conversationId,
-          tenantId,
-          stopReason,
-          step,
-          toolsUsed,
-          Date.now() - startedAt,
-        ]
-      );
+          [
+            randomUUID(),
+            conversationId,
+            tenantId,
+            stopReason,
+            step,
+            toolsUsed,
+            Date.now() - startedAt,
+          ]
+        );
 
-      return {
-        conversationId,
-        answer,
-        stopReason,
-        steps: step,
-        toolsUsed,
-        sources,
-      };
-    },
+        // How the run ended, on the trace and as one log line that metrics can count.
+        span.setAttributes({
+          "app.agent.stop_reason": stopReason,
+          "app.agent.steps": step,
+          "app.agent.tools": toolsUsed,
+        });
+        log("INFO", "agent run", {
+          stopReason,
+          steps: step,
+          tools: toolsUsed,
+          latencyMs: Date.now() - startedAt,
+        });
+
+        return {
+          conversationId,
+          answer,
+          stopReason,
+          steps: step,
+          toolsUsed,
+          sources,
+        };
+      }),
     input.userKey // every LLM call in this run is billed to this user (episode 8)
   );
 }

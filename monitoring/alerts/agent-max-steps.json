@@ -1,0 +1,26 @@
+{
+  "displayName": "Ask my docs: agent hitting its step limit",
+  "documentation": {
+    "content": "Agent runs stopped at max_steps more than 3 times in 15 minutes. The agent is looping: open one run in Cloud Trace and look at which tool it keeps calling.",
+    "mimeType": "text/markdown"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "Runs stopped at max_steps",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/ask_my_docs_agent_runs\" AND metric.label.stop_reason=\"max_steps\"",
+        "aggregations": [
+          {
+            "alignmentPeriod": "900s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 3,
+        "duration": "0s"
+      }
+    }
+  ]
+}

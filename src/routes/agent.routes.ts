@@ -4,6 +4,7 @@ import { runAgent, type AgentEvent } from "../agent/agent";
 import { decide } from "../agent/approvals";
 import { requirePermission } from "../auth/middleware";
 import { roleOf, tenantOf, userOf } from "./identity";
+import { guard } from "../gateway/middleware";
 
 export const agentRouter = express.Router();
 
@@ -14,7 +15,7 @@ const AgentBody = z.object({
 
 const canRead = requirePermission("documents:read");
 
-agentRouter.post("/agent", canRead, async (req, res) => {
+agentRouter.post("/agent", canRead, guard("message"), async (req, res) => {
   const body = AgentBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: "Send a message of up to 1000 characters." });
@@ -38,45 +39,52 @@ agentRouter.post("/agent", canRead, async (req, res) => {
 
 // The same agent as Server-Sent Events, for the web UI: each step as it happens,
 // then the answer as it's written, then a "done" event with the sources.
-agentRouter.post("/agent/stream", canRead, async (req, res) => {
-  const body = AgentBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: "Send a message of up to 1000 characters." });
-    return;
-  }
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-  const send = (type: string, data: object) =>
-    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
-
-  // If the user closes the page or presses Stop, stop the run and its LLM calls.
-  const abort = new AbortController();
-  res.on("close", () => abort.abort());
-
-  try {
-    const result = await runAgent({
-      ...body.data,
-      tenantId: tenantOf(req),
-      userKey: userOf(req),
-      role: roleOf(req),
-      signal: abort.signal,
-      onEvent: (event: AgentEvent) => send(event.type, event),
-    });
-    send("done", result);
-  } catch (error) {
-    if (!abort.signal.aborted) {
-      console.error(error);
-      send("error", {
-        message: "The agent couldn't answer right now. Please try again.",
-      });
+agentRouter.post(
+  "/agent/stream",
+  canRead,
+  guard("message"),
+  async (req, res) => {
+    const body = AgentBody.safeParse(req.body);
+    if (!body.success) {
+      res
+        .status(400)
+        .json({ error: "Send a message of up to 1000 characters." });
+      return;
     }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    const send = (type: string, data: object) =>
+      res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+
+    // If the user closes the page or presses Stop, stop the run and its LLM calls.
+    const abort = new AbortController();
+    res.on("close", () => abort.abort());
+
+    try {
+      const result = await runAgent({
+        ...body.data,
+        tenantId: tenantOf(req),
+        userKey: userOf(req),
+        role: roleOf(req),
+        signal: abort.signal,
+        onEvent: (event: AgentEvent) => send(event.type, event),
+      });
+      send("done", result);
+    } catch (error) {
+      if (!abort.signal.aborted) {
+        console.error(error);
+        send("error", {
+          message: "The agent couldn't answer right now. Please try again.",
+        });
+      }
+    }
+    res.end();
   }
-  res.end();
-});
+);
 
 // The user's answer to an approval_required event. decide() checks that the action
 // is theirs, still pending and not expired, and that their role still allows it.

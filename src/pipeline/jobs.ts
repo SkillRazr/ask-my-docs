@@ -7,6 +7,7 @@ export interface IngestionJob {
   source: string;
   content: string;
   attempts: number;
+  reviewed: boolean; // a person has checked it, so the injection scan is skipped (episode 8)
 }
 
 export async function enqueue(tenantId: string, title: string, source: string, content: string) {
@@ -25,7 +26,7 @@ export async function claimNext(): Promise<IngestionJob | null> {
        SELECT id FROM ingestion_jobs WHERE status = 'queued'
        ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
      )
-     RETURNING id, tenant_id, title, source, content, attempts`
+     RETURNING id, tenant_id, title, source, content, attempts, reviewed`
   );
   return rows[0] ?? null;
 }
@@ -40,5 +41,13 @@ export async function fail(job: IngestionJob, error: unknown) {
   await pool.query(
     `UPDATE ingestion_jobs SET status = $2, error = $3, updated_at = NOW() WHERE id = $1`,
     [job.id, status, String(error)]
+  );
+}
+
+// Holds a job back until a person reviews it (episode 8).
+export async function quarantine(id: number, reason: string) {
+  await pool.query(
+    `UPDATE ingestion_jobs SET status = 'quarantined', error = $2, updated_at = NOW() WHERE id = $1`,
+    [id, reason]
   );
 }

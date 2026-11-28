@@ -265,6 +265,9 @@ async function quickAnswer(question, view, signal) {
     if (type === "delta") {
       text += data.text;
       view.setText(text);
+    } else if (type === "replace") {
+      text = data.text; // the gateway's output check changed the answer (episode 8)
+      view.setText(text);
     } else if (type === "done") {
       sources = data.sources;
       view.setText(text, cite);

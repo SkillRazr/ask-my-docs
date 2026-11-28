@@ -1,5 +1,7 @@
 import "dotenv/config";
-import { claimNext, fail, finish } from "./pipeline/jobs";
+import { claimNext, fail, finish, quarantine } from "./pipeline/jobs";
+import { looksLikeInjection } from "./gateway/injection";
+import { logEvent } from "./gateway/events";
 import { replaceDocument } from "./services/ingestion.service";
 import { withTenant } from "./services/usage";
 import { clearCache } from "./rag/cache";
@@ -15,6 +17,14 @@ while (true) {
   if (!job) {
     if (once) break;
     await sleep(2000);
+    continue;
+  }
+  // A document that gives orders to an AI is held back before it's indexed, because
+  // once it's searchable, every answer that retrieves it carries the attack (episode 8).
+  if (!job.reviewed && looksLikeInjection(job.content)) {
+    await quarantine(job.id, "looks like a prompt injection");
+    await logEvent(job.tenant_id, null, "quarantined", job.title);
+    console.log(`${job.title}: quarantined for review`);
     continue;
   }
   try {

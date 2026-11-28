@@ -15,15 +15,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [5. AI agents and memory](https://skillrazr.com/ai-ready-fresher/5) | `episode-05` | An agent that plans and calls tools in several steps through MCP, knows when to stop, remembers conversations and facts about each user, and can read images |
 | [6. Project: an end-to-end AI app](https://skillrazr.com/ai-ready-fresher/6) | `episode-06` | A web UI at http://localhost:3000 with streamed answers, the agent's steps as they happen, clickable sources and thumbs-up feedback, on phones and laptops |
 | [7. Identity, RBAC and agent permissions](https://skillrazr.com/ai-ready-fresher/7) | `episode-07` | Sign in with Google (OpenID Connect) and session JWTs, invited users with viewer, editor and admin roles, tools per role, and an approval step before the agent changes anything |
+| [8. Agent gateways, guardrails and policy](https://skillrazr.com/ai-ready-fresher/8) | `episode-08` | A gateway in front of every LLM route: per-user rate limits and daily budgets, personal data redaction, prompt injection checks, policy rules for tool calls, output checks, and quarantine for suspicious documents |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-06...episode-07](https://github.com/SkillRazr/ask-my-docs/compare/episode-06...episode-07).
+To see exactly what an episode added, compare it with the one before, for example [episode-07...episode-08](https://github.com/SkillRazr/ask-my-docs/compare/episode-07...episode-08).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-07   # or any branch in the table
+git checkout episode-08   # or any branch in the table
 ```
 
 ## Run it
@@ -47,6 +48,7 @@ npm run agent             # chat with the agent: memory, several steps, tool cal
 npm run describe -- photo.png "What does this say?"                  # read an image
 npm run eval              # scores retrieval, answers, faithfulness and refusals
 npm run costs             # tokens, cost and latency per purpose, tenant and tool
+npm run guardrails        # what the gateway blocked, top spenders, documents held for review
 npm run mcp:client        # starts the MCP server and calls its tools
 npm run mcp:inspect       # opens the MCP Inspector in your browser
 npm run dev               # starts the API and the web UI on http://localhost:3000 (sign in first)
@@ -113,6 +115,7 @@ sql/upgrade-episode-04.sql    llm_usage and tool_calls tables
 sql/upgrade-episode-05.sql    conversations, messages, memories, agent_runs
 sql/upgrade-episode-06.sql    feedback from the web UI
 sql/upgrade-episode-07.sql    users and their roles, and actions waiting for approval
+sql/upgrade-episode-08.sql    spend per user, guardrail events, rate limits, document review
 public/                       the web UI: index.html, styles.css, app.js (no build step)
 src/db/                       PostgreSQL connection and migrations
 src/services/                 LLM client (retries, timeouts), usage and cost, embeddings, chunking, ingestion, search
@@ -132,6 +135,8 @@ src/routes/auth.routes.ts     sign in with Google, local sign-in for development
 src/routes/admin.routes.ts    invite users and set roles (admins only)
 src/auth/                     roles and permissions, session tokens, Google sign-in, middleware
 src/agent/approvals.ts        actions the agent wants to take, waiting for the user
+src/gateway/                  rate limits and budgets, PII redaction, injection checks, tool policy, output checks
+src/guardrails.ts             the guardrails report, and releasing quarantined documents
 src/users.ts                  manage users from the terminal
 src/app.ts, src/server.ts     the Express API
 src/ingest.ts                 queue the files in a folder

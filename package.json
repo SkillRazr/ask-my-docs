@@ -17,6 +17,7 @@
     "agent": "tsx src/agent-chat.ts",
     "describe": "tsx src/describe-image.ts",
     "users": "tsx src/users.ts",
+    "guardrails": "tsx src/guardrails.ts",
     "mcp": "tsx src/mcp-stdio.ts",
     "mcp:client": "tsx src/mcp-client.ts",
     "mcp:inspect": "npx @modelcontextprotocol/inspector npx tsx src/mcp-stdio.ts",

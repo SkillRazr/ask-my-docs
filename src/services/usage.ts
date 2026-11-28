@@ -25,13 +25,17 @@ export function costOf(
   return (inputTokens * price.input + outputTokens * price.output) / 1_000_000;
 }
 
-// Which tenant the current request is for. Set it once at the start of a request
-// with withTenant(); every LLM call made inside it is then billed to that tenant,
-// without passing tenantId through every function.
-const current = new AsyncLocalStorage<{ tenantId: string }>();
+// Which tenant (and, since episode 8, which user) the current request is for. Set it
+// once at the start of a request with withTenant(); every LLM call made inside it is
+// then billed to them, without passing ids through every function. An inner call
+// that only knows the tenant keeps the user from the outer one.
+const current = new AsyncLocalStorage<{ tenantId: string; userKey?: string }>();
 
-export const withTenant = <T>(tenantId: string, work: () => Promise<T>) =>
-  current.run({ tenantId }, work);
+export const withTenant = <T>(
+  tenantId: string,
+  work: () => Promise<T>,
+  userKey = current.getStore()?.userKey
+) => current.run({ tenantId, userKey }, work);
 
 export async function recordUsage(
   purpose: string,
@@ -41,10 +45,11 @@ export async function recordUsage(
   startedAt: number
 ) {
   const tenantId = current.getStore()?.tenantId ?? "none";
+  const userKey = current.getStore()?.userKey ?? null;
   try {
     await pool.query(
-      `INSERT INTO llm_usage (tenant_id, purpose, model, input_tokens, output_tokens, cost_usd, latency_ms)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO llm_usage (tenant_id, purpose, model, input_tokens, output_tokens, cost_usd, latency_ms, user_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         tenantId,
         purpose,
@@ -53,6 +58,7 @@ export async function recordUsage(
         outputTokens,
         costOf(model, inputTokens, outputTokens),
         Date.now() - startedAt,
+        userKey,
       ]
     );
   } catch (error) {

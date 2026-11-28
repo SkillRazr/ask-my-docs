@@ -45,7 +45,12 @@ async function userFor(role: Role) {
     const user = await upsertUser(`eval-${role}@example.com`, tenantId, role);
     if (!user) throw new Error(`eval-${role}@example.com is in another tenant`);
     users[role] = user.id;
-    await forgetUser(tenantId, user.id); // every run starts with no memories
+    // Every run starts clean: no memories, and no actions from earlier runs, which
+    // would count against the documents-per-day policy (episode 8).
+    await forgetUser(tenantId, user.id);
+    await pool.query("DELETE FROM pending_actions WHERE user_id = $1", [
+      user.id,
+    ]);
   }
   return users[role]!;
 }
@@ -165,9 +170,9 @@ await withTenant(tenantId, async () => {
   }
 });
 
-// Approval requests made by the tests are left pending; cancel them.
+// Remove the approval requests the tests made, so nobody can approve them later.
 await pool.query(
-  `UPDATE pending_actions SET status = 'rejected' WHERE status = 'pending' AND user_id = ANY($1::uuid[])`,
+  "DELETE FROM pending_actions WHERE user_id = ANY($1::uuid[])",
   [Object.values(users)]
 );
 

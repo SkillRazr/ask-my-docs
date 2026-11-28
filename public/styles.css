@@ -389,6 +389,16 @@ dialog::backdrop {
   white-space: pre-wrap;
 }
 
+/* Your data */
+.danger {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  background: none;
+  color: var(--bad);
+}
+
 /* Small phones: keep the header to two short rows */
 @media (max-width: 30rem) {
   .who {

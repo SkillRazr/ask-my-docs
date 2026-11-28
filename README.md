@@ -19,15 +19,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [9. Observability and agent evaluation](https://skillrazr.com/ai-ready-fresher/9) | `episode-09` | Traces of every request, agent step, tool call and LLM call (locally in Jaeger, or in Cloud Trace), structured logs, a Cloud Monitoring dashboard and alerts, agent evals for tool use, answers and safety, and evals that fail a pull request in CI |
 | [10. Deploy on Cloud Run and Cloud Functions](https://skillrazr.com/ai-ready-fresher/10) | `episode-10` | A Docker image built by Cloud Build, the API and web UI live on Cloud Run with Cloud SQL and Secret Manager, a Cloud Function that indexes documents uploaded to Cloud Storage, and an optional self-hosted model |
 | [11. Networking and scaling on Google Cloud](https://skillrazr.com/ai-ready-fresher/11) | `episode-11` | Cloud SQL on a private IP in a VPC, Direct VPC egress, one service account per service with access to single secrets, autoscaling tuned with a load test, a private worker fed by Cloud Tasks, document events on Pub/Sub, and a teardown script |
+| [12. Governance and the production capstone](https://skillrazr.com/ai-ready-fresher/12) | `episode-12` | An append-only audit trail, automatic data retention, "My data" download and delete for every user (India's DPDP Act), versioned prompts you can roll back, unit tests in CI, and a runbook |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-10...episode-11](https://github.com/SkillRazr/ask-my-docs/compare/episode-10...episode-11).
+To see exactly what an episode added, compare it with the one before, for example [episode-11...episode-12](https://github.com/SkillRazr/ask-my-docs/compare/episode-11...episode-12).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-11   # or any branch in the table
+git checkout episode-12   # or any branch in the table
 ```
 
 ## Run it
@@ -49,11 +50,13 @@ npm run chat              # a terminal chat that understands follow-up questions
 npm run assistant -- "Which documents mention the notice period?"   # tool calling
 npm run agent             # chat with the agent: memory, several steps, tool calls shown
 npm run describe -- photo.png "What does this say?"                  # read an image
+npm test                  # fast unit tests: no database, no API key
 npm run eval              # scores retrieval, answers, faithfulness and refusals
 npm run eval:agent        # scores the agent's tool use, answers and safety
 npm run feedback          # turns thumbs-down answers into new test cases to review
 npm run costs             # tokens, cost and latency per purpose, tenant and tool
 npm run guardrails        # what the gateway blocked, top spenders, documents held for review
+npm run retention         # deletes data past its retention period (run daily)
 npm run mcp:client        # starts the MCP server and calls its tools
 npm run mcp:inspect       # opens the MCP Inspector in your browser
 npm run dev               # starts the API and the web UI on http://localhost:3000 (sign in first)
@@ -166,6 +169,9 @@ sql/upgrade-episode-05.sql    conversations, messages, memories, agent_runs
 sql/upgrade-episode-06.sql    feedback from the web UI
 sql/upgrade-episode-07.sql    users and their roles, and actions waiting for approval
 sql/upgrade-episode-08.sql    spend per user, guardrail events, rate limits, document review
+sql/upgrade-episode-12.sql    the audit trail, and prompt versions on LLM calls and agent runs
+test/                         unit tests for guardrails, permissions and prompts
+RUNBOOK.md                    what to do when an alert fires
 public/                       the web UI: index.html, styles.css, app.js (no build step)
 src/db/                       PostgreSQL connection and migrations
 src/services/                 LLM client (retries, timeouts), usage and cost, embeddings, chunking, ingestion, search
@@ -187,6 +193,10 @@ src/auth/                     roles and permissions, session tokens, Google sign
 src/agent/approvals.ts        actions the agent wants to take, waiting for the user
 src/gateway/                  rate limits and budgets, PII redaction, injection checks, tool policy, output checks
 src/guardrails.ts             the guardrails report, and releasing quarantined documents
+src/prompts.ts                every prompt, with versions you can pin to roll back
+src/governance/               the audit trail, retention, and each user's data rights
+src/routes/privacy.routes.ts  GET and DELETE /me/data: download or erase your own data
+src/retention.ts              apply the retention periods
 src/users.ts                  manage users from the terminal
 src/app.ts, src/server.ts     the Express API
 src/ingest.ts                 queue the files in a folder

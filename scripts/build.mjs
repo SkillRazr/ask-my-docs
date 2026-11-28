@@ -21,7 +21,7 @@ const common = {
 await rm("dist", { recursive: true, force: true });
 
 // The API, the telemetry that loads before it, and the scripts that run as Cloud Run
-// jobs from the same image: migrate, worker and users.
+// jobs from the same image: migrate, worker, users and retention.
 await build({
   ...common,
   entryPoints: {
@@ -30,6 +30,7 @@ await build({
     migrate: "src/db/migrate.ts",
     worker: "src/worker.ts",
     users: "src/users.ts",
+    retention: "src/retention.ts",
   },
   outdir: "dist",
   outExtension: { ".js": ".mjs" },

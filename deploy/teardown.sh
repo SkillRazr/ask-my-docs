@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deletes everything episodes 10 and 11 created, so nothing keeps billing you.
+# Deletes everything episodes 10 to 12 created, so nothing keeps billing you.
 # The quickest way is to delete the whole project instead:
 #   gcloud projects delete YOUR_PROJECT_ID
 # Use this script when the project holds other things you want to keep.
@@ -14,6 +14,8 @@ gcloud run services delete ask-my-docs --region=$REGION
 gcloud run services delete ask-my-docs-worker --region=$REGION
 gcloud run jobs delete migrate --region=$REGION
 gcloud run jobs delete users --region=$REGION
+gcloud run jobs delete retention --region=$REGION                  # episode 12
+gcloud scheduler jobs delete retention-daily --location=$REGION    # episode 12
 gcloud tasks queues delete ingestion --location=$REGION
 gcloud pubsub subscriptions delete document-events-log
 gcloud pubsub topics delete document-events

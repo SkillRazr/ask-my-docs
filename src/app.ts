@@ -12,6 +12,7 @@ import { authenticate } from "./auth/middleware";
 import { authRouter } from "./routes/auth.routes";
 import { adminRouter } from "./routes/admin.routes";
 import { internalRouter } from "./routes/internal.routes";
+import { privacyRouter } from "./routes/privacy.routes";
 
 export const app = express();
 app.use(express.json());
@@ -59,6 +60,7 @@ if (process.env.APP_MODE === "worker") {
   app.use(agentRouter); // the agent, at /agent, /agent/stream and /agent/actions/:id
   app.use(passagesRouter); // one source passage, for the UI
   app.use(feedbackRouter); // thumbs up or down, from the UI
+  app.use(privacyRouter); // download or erase your own data (episode 12)
 
   // The web UI (episode 6): plain HTML, CSS and JavaScript, served from public/.
   app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));

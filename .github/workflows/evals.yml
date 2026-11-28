@@ -1,5 +1,6 @@
-# Runs the RAG and agent evals on every pull request, and fails it if a score drops.
-# It costs OpenAI tokens, so it runs on pull requests and on demand, not on every push.
+# Runs the fast tests, then the RAG and agent evals, on every pull request, and fails
+# it if a test fails or a score drops. The evals cost OpenAI tokens, so this runs on
+# pull requests and on demand, not on every push.
 name: evals
 
 on:
@@ -7,7 +8,22 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Type checks and unit tests: no database, no API key, about a minute (episode 12).
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
   evals:
+    needs: tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -33,13 +49,12 @@ jobs:
       - uses: actions/setup-node@v4
         if: env.OPENAI_API_KEY != ''
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Install, migrate and index the sample docs
         if: env.OPENAI_API_KEY != ''
         run: |
           npm ci
-          npm run typecheck
           npm run migrate
           npm run ingest
           npm run ingest:db

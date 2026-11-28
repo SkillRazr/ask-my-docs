@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { pool } from "./db/pool";
+import { audit } from "./governance/audit";
+import { dispatch } from "./pipeline/dispatch";
 
 // What the gateway did, and the documents waiting for review.
 // npm run guardrails                     the report (last 7 days)
@@ -7,13 +9,23 @@ import { pool } from "./db/pool";
 const [command, id] = process.argv.slice(2);
 
 if (command === "release") {
-  const { rowCount } = await pool.query(
+  const { rows } = await pool.query(
     `UPDATE ingestion_jobs SET status = 'queued', reviewed = true, attempts = 0, updated_at = NOW()
-     WHERE id = $1 AND status = 'quarantined'`,
+     WHERE id = $1 AND status = 'quarantined' RETURNING id, tenant_id, title`,
     [id]
   );
+  const job = rows[0];
+  if (job) {
+    await dispatch(job.id); // on Google Cloud, hand it to the worker (episode 11)
+    await audit({
+      tenantId: job.tenant_id,
+      actor: "cli",
+      action: "document.released",
+      target: job.title,
+    });
+  }
   console.log(
-    rowCount
+    job
       ? "Released. Run the worker to index it."
       : "No quarantined job with that id."
   );

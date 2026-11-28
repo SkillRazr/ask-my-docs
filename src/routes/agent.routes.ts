@@ -1,4 +1,5 @@
 import express from "express";
+import { audit } from "../governance/audit";
 import { z } from "zod";
 import { runAgent, type AgentEvent } from "../agent/agent";
 import { decide } from "../agent/approvals";
@@ -98,6 +99,12 @@ agentRouter.post("/agent/actions/:id", canRead, async (req, res) => {
     return;
   }
   const decision = await decide(id.data, req.user!, body.data.approve);
+  await audit({
+    tenantId: req.user!.tenantId,
+    actor: req.user!.id,
+    action: `action.${decision.status}`,
+    target: id.data,
+  });
   const status =
     decision.status === "not_found"
       ? 404

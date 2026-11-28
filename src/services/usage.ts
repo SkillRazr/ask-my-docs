@@ -43,7 +43,8 @@ export async function recordUsage(
   model: string,
   inputTokens: number,
   outputTokens: number,
-  startedAt: number
+  startedAt: number,
+  promptVersion?: string // which prompt produced it (episode 12)
 ) {
   const tenantId = current.getStore()?.tenantId ?? "none";
   const userKey = current.getStore()?.userKey ?? null;
@@ -60,6 +61,7 @@ export async function recordUsage(
         "gen_ai.usage.output_tokens": outputTokens,
         "app.llm.purpose": purpose,
         "app.llm.cost_usd": cost,
+        ...(promptVersion ? { "app.prompt.version": promptVersion } : {}),
       },
     })
     .end();
@@ -69,11 +71,12 @@ export async function recordUsage(
     inputTokens,
     outputTokens,
     costUsd: cost,
+    promptVersion,
   });
   try {
     await pool.query(
-      `INSERT INTO llm_usage (tenant_id, purpose, model, input_tokens, output_tokens, cost_usd, latency_ms, user_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO llm_usage (tenant_id, purpose, model, input_tokens, output_tokens, cost_usd, latency_ms, user_key, prompt_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         tenantId,
         purpose,
@@ -83,6 +86,7 @@ export async function recordUsage(
         cost,
         Date.now() - startedAt,
         userKey,
+        promptVersion ?? null,
       ]
     );
   } catch (error) {
@@ -97,7 +101,7 @@ export async function tracked<
     model: string;
     usage?: { input_tokens: number; output_tokens: number } | null;
   },
->(purpose: string, call: () => Promise<T>): Promise<T> {
+>(purpose: string, call: () => Promise<T>, promptVersion?: string): Promise<T> {
   const startedAt = Date.now();
   const response = await call();
   await recordUsage(
@@ -105,7 +109,8 @@ export async function tracked<
     response.model,
     response.usage?.input_tokens ?? 0,
     response.usage?.output_tokens ?? 0,
-    startedAt
+    startedAt,
+    promptVersion
   );
   return response;
 }

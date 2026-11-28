@@ -9,6 +9,7 @@ import {
   type User,
 } from "../auth/session";
 import { findUserByEmail } from "../auth/users";
+import { audit } from "../governance/audit";
 
 export const authRouter = express.Router();
 
@@ -26,12 +27,22 @@ const cookieOptions = (maxAgeMs: number) => ({
   path: "/",
 });
 
-async function startSession(res: express.Response, user: User) {
+async function startSession(
+  res: express.Response,
+  user: User,
+  method: "google" | "dev"
+) {
   res.cookie(
     SESSION_COOKIE,
     await signSession(user),
     cookieOptions(SESSION_HOURS * 3600_000)
   );
+  await audit({
+    tenantId: user.tenantId,
+    actor: user.id,
+    action: "user.signed_in",
+    details: { method },
+  });
 }
 
 // A quick sign-in for your own laptop, with no Google setup. It trusts whatever
@@ -62,7 +73,7 @@ authRouter.get("/auth/callback", async (req, res) => {
     const email = await finishSignIn(code, flow);
     const user = await findUserByEmail(email);
     if (!user) return fail("not-invited"); // a real Google account, but not one of your users
-    await startSession(res, user);
+    await startSession(res, user, "google");
     res.redirect("/");
   } catch (error) {
     console.error(error);
@@ -81,7 +92,7 @@ authRouter.post("/auth/dev-login", async (req, res) => {
     res.status(403).json({ error: "That email hasn't been invited." });
     return;
   }
-  await startSession(res, user);
+  await startSession(res, user, "dev");
   res.json(user);
 });
 
@@ -93,7 +104,13 @@ authRouter.get("/auth/me", (req, res) => {
   res.json(req.user);
 });
 
-authRouter.post("/auth/logout", (_req, res) => {
+authRouter.post("/auth/logout", async (req, res) => {
   res.clearCookie(SESSION_COOKIE, { path: "/" });
+  if (req.user)
+    await audit({
+      tenantId: req.user.tenantId,
+      actor: req.user.id,
+      action: "user.signed_out",
+    });
   res.json({ signedOut: true });
 });

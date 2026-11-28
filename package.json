@@ -28,6 +28,8 @@
     "dev": "tsx --import ./src/telemetry.ts src/server.ts",
     "build": "node scripts/build.mjs",
     "start": "node --enable-source-maps --import ./dist/telemetry.mjs dist/server.mjs",
+    "retention": "tsx src/retention.ts",
+    "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc"
   },
   "license": "MIT",

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { isRole } from "./auth/rbac";
 import { listUsers, removeUser, upsertUser } from "./auth/users";
 import { pool } from "./db/pool";
+import { audit } from "./governance/audit";
 
 // Manage users from the terminal. You need this for the very first admin: nobody can
 // sign in until someone is invited, and only an admin can invite through the app.
@@ -17,6 +18,14 @@ if (command === "add") {
       "Usage: npm run users -- add <email> [tenant] [viewer|editor|admin]"
     );
   const user = await upsertUser(email, tenantId, role);
+  if (user)
+    await audit({
+      tenantId,
+      actor: "cli",
+      action: "user.role_set",
+      target: user.email,
+      details: { role },
+    });
   console.log(
     user
       ? `${user.email} is now ${user.role} in "${user.tenant_id}".`
@@ -25,7 +34,15 @@ if (command === "add") {
 } else if (command === "list") {
   console.table(await listUsers(args[0] ?? "default"));
 } else if (command === "remove") {
-  console.log((await removeUser(args[0] ?? "")) ? "Removed." : "No such user.");
+  const removed = await removeUser(args[0] ?? "");
+  if (removed)
+    await audit({
+      tenantId: "*",
+      actor: "cli",
+      action: "user.removed",
+      target: args[0],
+    });
+  console.log(removed ? "Removed." : "No such user.");
 } else {
   console.log(
     "Commands: add <email> [tenant] [role], list [tenant], remove <email>"

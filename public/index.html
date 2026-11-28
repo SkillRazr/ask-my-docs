@@ -30,6 +30,7 @@
         </div>
         <div class="account">
           <span id="who" class="who"></span>
+          <button type="button" id="my-data" class="ghost">My data</button>
           <button type="button" id="sign-out" class="ghost">Sign out</button>
         </div>
       </div>
@@ -91,6 +92,24 @@
         <button type="button" class="ghost" id="passage-close">Close</button>
       </div>
       <p id="passage-text"></p>
+    </dialog>
+
+    <dialog id="privacy">
+      <div class="passage-head">
+        <h2>Your data</h2>
+        <button type="button" class="ghost" id="privacy-close">Close</button>
+      </div>
+      <p>
+        We keep your conversations for 90 days and your feedback for 180 days,
+        then delete them automatically. You can download or delete them now.
+      </p>
+      <p><a href="/me/data" download>Download my data</a> (a JSON file)</p>
+      <p>
+        <button type="button" id="erase" class="danger">
+          Delete my history
+        </button>
+      </p>
+      <p id="privacy-status" class="note" role="status"></p>
     </dialog>
 
     <script type="module" src="/app.js"></script>

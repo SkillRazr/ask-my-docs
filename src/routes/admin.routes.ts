@@ -3,7 +3,8 @@ import { z } from "zod";
 import { requirePermission } from "../auth/middleware";
 import { ROLES } from "../auth/rbac";
 import { listUsers, removeUser, upsertUser } from "../auth/users";
-import { tenantOf } from "./identity";
+import { tenantOf, userOf } from "./identity";
+import { audit } from "../governance/audit";
 
 export const adminRouter = express.Router();
 adminRouter.use("/admin", requirePermission("users:manage"));
@@ -28,6 +29,13 @@ adminRouter.post("/admin/users", async (req, res) => {
     res.status(409).json({ error: "Couldn't add that user." });
     return;
   }
+  await audit({
+    tenantId: tenantOf(req),
+    actor: userOf(req),
+    action: "user.role_set",
+    target: user.email,
+    details: { role: user.role },
+  });
   res.json({ email: user.email, role: user.role });
 });
 
@@ -44,5 +52,11 @@ adminRouter.delete("/admin/users/:email", async (req, res) => {
     res.status(404).json({ error: "No such user." });
     return;
   }
+  await audit({
+    tenantId: tenantOf(req),
+    actor: userOf(req),
+    action: "user.removed",
+    target: email,
+  });
   res.json({ removed: email });
 });

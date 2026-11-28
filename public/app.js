@@ -485,4 +485,33 @@ $("#sign-out").onclick = async () => {
   start();
 };
 
+// ---- Your data (episode 12) ----
+const privacy = $("#privacy");
+$("#my-data").onclick = () => {
+  $("#privacy-status").textContent = "";
+  $("#erase").dataset.confirm = "";
+  $("#erase").textContent = "Delete my history";
+  privacy.showModal();
+};
+$("#privacy-close").onclick = () => privacy.close();
+$("#erase").onclick = async () => {
+  const button = $("#erase");
+  // Two taps, so nobody deletes everything by accident.
+  if (!button.dataset.confirm) {
+    button.dataset.confirm = "yes";
+    button.textContent = "Tap again to delete everything";
+    return;
+  }
+  const response = await fetch("/me/data", { method: "DELETE" });
+  $("#privacy-status").textContent = response.ok
+    ? "Deleted. Your conversations, memories and feedback are gone."
+    : "Couldn't delete right now. Please try again.";
+  if (response.ok) {
+    newChat();
+    store.set("conversationId", null);
+  }
+  button.dataset.confirm = "";
+  button.textContent = "Delete my history";
+};
+
 start();

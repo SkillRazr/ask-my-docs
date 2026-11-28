@@ -8,7 +8,7 @@ import { withTenant } from "../services/usage";
 // API key), never by the model: a tool argument can be anything the model writes.
 export interface ToolContext {
   tenantId: string;
-  caller: "mcp-stdio" | "mcp-http" | "assistant";
+  caller: "mcp-stdio" | "mcp-http" | "assistant" | "agent";
 }
 
 export interface Tool<Shape extends z.ZodRawShape = z.ZodRawShape> {

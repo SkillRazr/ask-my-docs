@@ -14,6 +14,8 @@
     "ask": "tsx src/ask-docs.ts",
     "chat": "tsx src/chat.ts",
     "assistant": "tsx src/assistant.ts",
+    "agent": "tsx src/agent-chat.ts",
+    "describe": "tsx src/describe-image.ts",
     "mcp": "tsx src/mcp-stdio.ts",
     "mcp:client": "tsx src/mcp-client.ts",
     "mcp:inspect": "npx @modelcontextprotocol/inspector npx tsx src/mcp-stdio.ts",

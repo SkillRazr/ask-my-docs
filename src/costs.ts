@@ -33,4 +33,13 @@ const toolCalls = await pool.query(
 );
 console.log("Tool calls:");
 console.table(toolCalls.rows);
+const runs = await pool.query(
+  `SELECT stop_reason, COUNT(*)::int AS runs, ROUND(AVG(steps), 1)::float AS avg_steps,
+          ROUND(AVG(latency_ms))::int AS avg_ms
+   FROM agent_runs WHERE created_at > NOW() - make_interval(days => $1)
+   GROUP BY stop_reason ORDER BY runs DESC`,
+  [days]
+);
+console.log("Agent runs (episode 5):");
+console.table(runs.rows);
 await pool.end();

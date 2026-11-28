@@ -20,6 +20,7 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [10. Deploy on Cloud Run and Cloud Functions](https://skillrazr.com/ai-ready-fresher/10) | `episode-10` | A Docker image built by Cloud Build, the API and web UI live on Cloud Run with Cloud SQL and Secret Manager, a Cloud Function that indexes documents uploaded to Cloud Storage, and an optional self-hosted model |
 | [11. Networking and scaling on Google Cloud](https://skillrazr.com/ai-ready-fresher/11) | `episode-11` | Cloud SQL on a private IP in a VPC, Direct VPC egress, one service account per service with access to single secrets, autoscaling tuned with a load test, a private worker fed by Cloud Tasks, document events on Pub/Sub, and a teardown script |
 | [12. Governance and the production capstone](https://skillrazr.com/ai-ready-fresher/12) | `episode-12` | An append-only audit trail, automatic data retention, "My data" download and delete for every user (India's DPDP Act), versioned prompts you can roll back, unit tests in CI, and a runbook |
+| [Bonus. Interviews, system design and your portfolio](https://skillrazr.com/ai-ready-fresher/13) | `bonus` | A README template and resume lines for this project, in `portfolio/` |
 
 To see exactly what an episode added, compare it with the one before, for example [episode-11...episode-12](https://github.com/SkillRazr/ask-my-docs/compare/episode-11...episode-12).
 
@@ -172,6 +173,7 @@ sql/upgrade-episode-08.sql    spend per user, guardrail events, rate limits, doc
 sql/upgrade-episode-12.sql    the audit trail, and prompt versions on LLM calls and agent runs
 test/                         unit tests for guardrails, permissions and prompts
 RUNBOOK.md                    what to do when an alert fires
+portfolio/                    a README template and resume lines for your own copy (Bonus)
 public/                       the web UI: index.html, styles.css, app.js (no build step)
 src/db/                       PostgreSQL connection and migrations
 src/services/                 LLM client (retries, timeouts), usage and cost, embeddings, chunking, ingestion, search

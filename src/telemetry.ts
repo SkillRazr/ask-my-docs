@@ -32,6 +32,6 @@ if (choice && exporters[choice]) {
     ],
   });
   sdk.start();
-  // Send the last spans before the process exits.
-  process.on("SIGTERM", () => sdk.shutdown().finally(() => process.exit(0)));
+  // Send the last spans before the process exits. server.ts decides when to exit.
+  process.once("SIGTERM", () => void sdk.shutdown());
 }

@@ -17,15 +17,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [7. Identity, RBAC and agent permissions](https://skillrazr.com/ai-ready-fresher/7) | `episode-07` | Sign in with Google (OpenID Connect) and session JWTs, invited users with viewer, editor and admin roles, tools per role, and an approval step before the agent changes anything |
 | [8. Agent gateways, guardrails and policy](https://skillrazr.com/ai-ready-fresher/8) | `episode-08` | A gateway in front of every LLM route: per-user rate limits and daily budgets, personal data redaction, prompt injection checks, policy rules for tool calls, output checks, and quarantine for suspicious documents |
 | [9. Observability and agent evaluation](https://skillrazr.com/ai-ready-fresher/9) | `episode-09` | Traces of every request, agent step, tool call and LLM call (locally in Jaeger, or in Cloud Trace), structured logs, a Cloud Monitoring dashboard and alerts, agent evals for tool use, answers and safety, and evals that fail a pull request in CI |
+| [10. Deploy on Cloud Run and Cloud Functions](https://skillrazr.com/ai-ready-fresher/10) | `episode-10` | A Docker image built by Cloud Build, the API and web UI live on Cloud Run with Cloud SQL and Secret Manager, a Cloud Function that indexes documents uploaded to Cloud Storage, and an optional self-hosted model |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-08...episode-09](https://github.com/SkillRazr/ask-my-docs/compare/episode-08...episode-09).
+To see exactly what an episode added, compare it with the one before, for example [episode-09...episode-10](https://github.com/SkillRazr/ask-my-docs/compare/episode-09...episode-10).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-09   # or any branch in the table
+git checkout episode-10   # or any branch in the table
 ```
 
 ## Run it
@@ -65,6 +66,32 @@ TRACE_EXPORTER=otlp npm run dev
 ```
 
 On Google Cloud, use `TRACE_EXPORTER=gcp` and run `monitoring/setup.sh` once to create the log-based metrics, the dashboard and the alerts.
+
+## Deploy it to Google Cloud
+
+Episode 10 walks through every step: Cloud SQL, Secret Manager, Artifact Registry, Cloud Run, the migrate job, and the Cloud Function that indexes uploads. Once that's set up, each new version is one command:
+
+```bash
+gcloud builds submit --config cloudbuild.yaml
+```
+
+To try the production image on your laptop first:
+
+```bash
+docker build -t ask-my-docs .
+docker run --rm -p 8080:8080 --env-file .env --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL=postgres://postgres:postgres@host.docker.internal:5432/postgres \
+  -e APP_URL=http://localhost:8080 ask-my-docs
+```
+
+The Cloud Function is built by `npm run build` into `dist/function`, and deployed from there:
+
+```bash
+npm run build
+gcloud functions deploy ingest-upload --gen2 --region=asia-south1 --runtime=nodejs22 \
+  --source=dist/function --entry-point=ingestUpload \
+  --trigger-bucket=YOUR_BUCKET --set-secrets=...   # see episode 10
+```
 
 Open http://localhost:3000 and sign in. With `AUTH_DEV_LOGIN=true` you can type an invited email instead of setting up Google. To call the API from the terminal, sign in once and keep the cookie:
 
@@ -124,6 +151,9 @@ evals/rag-tests.json          test questions, with the document that should answ
 evals/agent-tests.json        agent tasks, with the tools each should and shouldn't call
 evals/guard-tests.json        attacks the gateway should block, and safe questions it should let through
 monitoring/                   log-based metrics, dashboard and alerts for Cloud Monitoring
+Dockerfile, .dockerignore     the production image for Cloud Run
+cloudbuild.yaml               build, migrate and deploy on Google Cloud
+scripts/build.mjs             bundles the server, jobs and Cloud Function with esbuild
 .github/workflows/evals.yml   runs both evals on every pull request
 sql/schema.sql                the document_chunks table (episode 1)
 sql/upgrade-episode-03.sql    tenants, keyword search, ingestion queue, cache, faqs table
@@ -158,6 +188,8 @@ src/app.ts, src/server.ts     the Express API
 src/ingest.ts                 queue the files in a folder
 src/ingest-db.ts              queue the rows of the faqs table
 src/worker.ts                 index queued documents in the background
+src/pipeline/process.ts       index one queued document (used by the worker and the function)
+src/functions/ingest-upload.ts  the Cloud Function that indexes uploads to Cloud Storage
 src/ask-docs.ts, src/chat.ts  ask from the terminal
 src/assistant.ts              tool calling with the OpenAI API
 src/agent-chat.ts             chat with the agent in the terminal

@@ -1,0 +1,10 @@
+# Never send these to the image build: secrets, local data and things the build makes.
+.env
+.env.*
+!.env.example
+node_modules
+dist
+.git
+*.txt
+mcp-servers.json
+evals/from-feedback.json

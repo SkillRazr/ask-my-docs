@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { context } from "@opentelemetry/api";
 import { log } from "./observability";
+import { pool } from "./db/pool";
 import { askRouter } from "./routes/ask.routes";
 import { mcpRouter } from "./routes/mcp.routes";
 import { agentRouter } from "./routes/agent.routes";
@@ -18,7 +19,8 @@ app.use((req, res, next) => {
   const startedAt = Date.now();
   const active = context.active(); // the request's trace, so the log line links to it
   res.on("finish", () => {
-    if (!req.route) return; // static files and unknown paths: not worth a line
+    // Static files, unknown paths and health checks: not worth a line
+    if (!req.route || req.path === "/healthz") return;
     context.with(active, () =>
       log(res.statusCode >= 500 ? "ERROR" : "INFO", "request", {
         method: req.method,
@@ -30,6 +32,15 @@ app.use((req, res, next) => {
     );
   });
   next();
+});
+// For Cloud Run's health checks: is the app up, and can it reach the database?
+app.get("/healthz", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
 });
 app.use(authenticate); // sets req.user from the session cookie or a Bearer token
 app.use(authRouter); // sign in with Google, sign out, who am I (episode 7)

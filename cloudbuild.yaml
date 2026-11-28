@@ -1,0 +1,47 @@
+# Builds the image, upgrades the database and deploys a new revision to Cloud Run.
+# Run it by hand with:
+#   gcloud builds submit --config cloudbuild.yaml
+# or connect a trigger so every push to main runs it (episode 10).
+substitutions:
+  _REGION: asia-south1
+  _SERVICE: ask-my-docs
+  _REPO: ask-my-docs
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$BUILD_ID
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$BUILD_ID
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$BUILD_ID"]
+
+  # Run the migrations with the new image before any traffic reaches it. The job
+  # keeps its settings (database, secrets) from when you created it.
+  - id: migrate
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run jobs update migrate --region=${_REGION} \
+          --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$BUILD_ID &&
+        gcloud run jobs execute migrate --region=${_REGION} --wait
+
+  # Only the image changes. Settings stay as you set them with gcloud run deploy.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --region=${_REGION}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/app:$BUILD_ID
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -26,11 +26,16 @@
     "feedback": "tsx src/feedback-review.ts",
     "costs": "tsx src/costs.ts",
     "dev": "tsx --import ./src/telemetry.ts src/server.ts",
+    "build": "node scripts/build.mjs",
+    "start": "node --enable-source-maps --import ./dist/telemetry.mjs dist/server.mjs",
     "typecheck": "tsc"
   },
   "license": "MIT",
   "dependencies": {
+    "@google-cloud/cloud-sql-connector": "1.13.1",
+    "@google-cloud/functions-framework": "5.0.5",
     "@google-cloud/opentelemetry-cloud-trace-exporter": "3.1.0",
+    "@google-cloud/storage": "9.0.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "0.81.2",
@@ -47,6 +52,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "esbuild": "0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

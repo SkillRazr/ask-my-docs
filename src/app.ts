@@ -11,6 +11,7 @@ import { feedbackRouter } from "./routes/feedback.routes";
 import { authenticate } from "./auth/middleware";
 import { authRouter } from "./routes/auth.routes";
 import { adminRouter } from "./routes/admin.routes";
+import { internalRouter } from "./routes/internal.routes";
 
 export const app = express();
 app.use(express.json());
@@ -42,15 +43,23 @@ app.get("/healthz", async (_req, res) => {
     res.status(503).json({ ok: false });
   }
 });
-app.use(authenticate); // sets req.user from the session cookie or a Bearer token
-app.use(authRouter); // sign in with Google, sign out, who am I (episode 7)
-app.use(adminRouter); // invite users and set roles, for admins (episode 7)
-// Keep your episode 1 routes (documents and search) registered here too.
-app.use(askRouter);
-app.use(mcpRouter); // the MCP server over HTTP, at /mcp
-app.use(agentRouter); // the agent, at /agent, /agent/stream and /agent/actions/:id
-app.use(passagesRouter); // one source passage, for the UI
-app.use(feedbackRouter); // thumbs up or down, from the UI
 
-// The web UI (episode 6): plain HTML, CSS and JavaScript, served from public/.
-app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
+// The same image runs as two Cloud Run services (episode 11): the public app, and a
+// private worker that only indexes documents for Cloud Tasks. The worker has no
+// sign-in, no web UI and no LLM routes, so there's nothing else on it to attack.
+if (process.env.APP_MODE === "worker") {
+  app.use(internalRouter);
+} else {
+  app.use(authenticate); // sets req.user from the session cookie or a Bearer token
+  app.use(authRouter); // sign in with Google, sign out, who am I (episode 7)
+  app.use(adminRouter); // invite users and set roles, for admins (episode 7)
+  // Keep your episode 1 routes (documents and search) registered here too.
+  app.use(askRouter);
+  app.use(mcpRouter); // the MCP server over HTTP, at /mcp
+  app.use(agentRouter); // the agent, at /agent, /agent/stream and /agent/actions/:id
+  app.use(passagesRouter); // one source passage, for the UI
+  app.use(feedbackRouter); // thumbs up or down, from the UI
+
+  // The web UI (episode 6): plain HTML, CSS and JavaScript, served from public/.
+  app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
+}

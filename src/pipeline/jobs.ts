@@ -1,4 +1,5 @@
 import { pool } from "../db/pool";
+import { dispatch } from "./dispatch";
 
 export interface IngestionJob {
   id: number;
@@ -11,10 +12,13 @@ export interface IngestionJob {
 }
 
 export async function enqueue(tenantId: string, title: string, source: string, content: string) {
-  await pool.query(
-    `INSERT INTO ingestion_jobs (tenant_id, title, source, content) VALUES ($1, $2, $3, $4)`,
+  const { rows } = await pool.query(
+    `INSERT INTO ingestion_jobs (tenant_id, title, source, content) VALUES ($1, $2, $3, $4) RETURNING id`,
     [tenantId, title, source, content]
   );
+  // On Google Cloud, also ask Cloud Tasks to process it (episode 11). If that fails,
+  // the job is still in the table, and the next task or npm run worker will pick it up.
+  await dispatch(rows[0].id).catch((error) => console.error("Couldn't create a task", error));
 }
 
 // Claims the oldest queued job. SKIP LOCKED lets several workers run side by side

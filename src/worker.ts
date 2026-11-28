@@ -10,8 +10,7 @@ const once = process.argv.includes("--once");
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 while (true) {
-  const found = await processNext();
-  if (!found) {
+  if ((await processNext()) === "empty") {
     if (once) break;
     await sleep(2000);
   }

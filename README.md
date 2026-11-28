@@ -18,15 +18,16 @@ It starts as a semantic search service and grows a little every Sunday: a RAG ap
 | [8. Agent gateways, guardrails and policy](https://skillrazr.com/ai-ready-fresher/8) | `episode-08` | A gateway in front of every LLM route: per-user rate limits and daily budgets, personal data redaction, prompt injection checks, policy rules for tool calls, output checks, and quarantine for suspicious documents |
 | [9. Observability and agent evaluation](https://skillrazr.com/ai-ready-fresher/9) | `episode-09` | Traces of every request, agent step, tool call and LLM call (locally in Jaeger, or in Cloud Trace), structured logs, a Cloud Monitoring dashboard and alerts, agent evals for tool use, answers and safety, and evals that fail a pull request in CI |
 | [10. Deploy on Cloud Run and Cloud Functions](https://skillrazr.com/ai-ready-fresher/10) | `episode-10` | A Docker image built by Cloud Build, the API and web UI live on Cloud Run with Cloud SQL and Secret Manager, a Cloud Function that indexes documents uploaded to Cloud Storage, and an optional self-hosted model |
+| [11. Networking and scaling on Google Cloud](https://skillrazr.com/ai-ready-fresher/11) | `episode-11` | Cloud SQL on a private IP in a VPC, Direct VPC egress, one service account per service with access to single secrets, autoscaling tuned with a load test, a private worker fed by Cloud Tasks, document events on Pub/Sub, and a teardown script |
 
-To see exactly what an episode added, compare it with the one before, for example [episode-09...episode-10](https://github.com/SkillRazr/ask-my-docs/compare/episode-09...episode-10).
+To see exactly what an episode added, compare it with the one before, for example [episode-10...episode-11](https://github.com/SkillRazr/ask-my-docs/compare/episode-10...episode-11).
 
 To start from a given episode:
 
 ```bash
 git clone https://github.com/SkillRazr/ask-my-docs.git
 cd ask-my-docs
-git checkout episode-10   # or any branch in the table
+git checkout episode-11   # or any branch in the table
 ```
 
 ## Run it
@@ -93,6 +94,8 @@ gcloud functions deploy ingest-upload --gen2 --region=asia-south1 --runtime=node
   --trigger-bucket=YOUR_BUCKET --set-secrets=...   # see episode 10
 ```
 
+Episode 11 moves the database to a private IP and indexing to a private worker service fed by Cloud Tasks. When you're done, `deploy/teardown.sh` deletes everything (or delete the whole project).
+
 Open http://localhost:3000 and sign in. With `AUTH_DEV_LOGIN=true` you can type an invited email instead of setting up Google. To call the API from the terminal, sign in once and keep the cookie:
 
 ```bash
@@ -154,6 +157,7 @@ monitoring/                   log-based metrics, dashboard and alerts for Cloud 
 Dockerfile, .dockerignore     the production image for Cloud Run
 cloudbuild.yaml               build, migrate and deploy on Google Cloud
 scripts/build.mjs             bundles the server, jobs and Cloud Function with esbuild
+deploy/teardown.sh            deletes everything episodes 10 and 11 created on Google Cloud
 .github/workflows/evals.yml   runs both evals on every pull request
 sql/schema.sql                the document_chunks table (episode 1)
 sql/upgrade-episode-03.sql    tenants, keyword search, ingestion queue, cache, faqs table
@@ -190,6 +194,10 @@ src/ingest-db.ts              queue the rows of the faqs table
 src/worker.ts                 index queued documents in the background
 src/pipeline/process.ts       index one queued document (used by the worker and the function)
 src/functions/ingest-upload.ts  the Cloud Function that indexes uploads to Cloud Storage
+src/pipeline/dispatch.ts      hands queued jobs and uploads to Cloud Tasks
+src/pipeline/uploads.ts       reads an upload from Cloud Storage and queues it
+src/pipeline/events.ts        announces indexed documents on Pub/Sub
+src/routes/internal.routes.ts the private worker service's route, called by Cloud Tasks
 src/ask-docs.ts, src/chat.ts  ask from the terminal
 src/assistant.ts              tool calling with the OpenAI API
 src/agent-chat.ts             chat with the agent in the terminal
